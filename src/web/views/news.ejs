@@ -21,40 +21,54 @@
     <span class="text-muted ms-2">共 <%= total %> 条</span>
   </div>
   
-  <div class="ms-auto d-flex align-items-center gap-2">
-    <!-- 筛选和搜索 -->
-    <form method="get" class="d-flex align-items-center gap-2">
+  <div class="ms-auto d-flex align-items-center" style="gap: 1rem;">
+    <!-- 搜索框（独立表单） -->
+    <form id="searchForm" method="get" class="d-flex align-items-center">
       <input type="hidden" name="status" value="<%= status %>">
-      <select name="source" class="form-select form-select-sm" style="width: 130px;" onchange="this.form.submit()">
+      <% if (sourceId) { %>
+        <input type="hidden" name="source" value="<%= sourceId %>">
+      <% } %>
+      <div class="input-group" style="height: 38px; width: fit-content;">
+        <!-- 搜索输入框：移除多余高度，宽度固定240px -->
+        <input type="text" name="search" class="form-control" style="width: 240px; height: 100%;" placeholder="搜索..." value="<%= search %>">
+        <!-- 搜索按钮：高度继承父容器，垂直居中 -->
+        <button type="submit" class="btn btn-outline-secondary" style="height: 100%;"><i class="bi bi-search"></i></button>
+        <!-- 清除按钮：条件渲染，和搜索按钮同行 -->
+        <% if (search || sourceId) { %>
+          <a href="/news?status=<%= status %>" class="btn btn-outline-secondary" style="height: 100%; line-height: 24px;" title="清除"><i class="bi bi-x"></i></a>
+        <% } %>
+      </div>
+    </form>
+    
+    <!-- 信源筛选（独立表单） -->
+    <form id="sourceFilterForm" method="get" class="d-flex align-items-center">
+      <input type="hidden" name="status" value="<%= status %>">
+      <% if (search) { %>
+        <input type="hidden" name="search" value="<%= search %>">
+      <% } %>
+      <select name="source" class="form-select form-select-sm" style="width: 130px;" onchange="document.getElementById('sourceFilterForm').submit()">
         <option value="">全部信源</option>
         <% sources.filter(s => s.enabled).forEach(source => { %>
           <option value="<%= source.id %>" <%= String(sourceId) === String(source.id) ? 'selected' : '' %>><%= source.name %></option>
         <% }); %>
       </select>
-      <div class="input-group input-group-sm" style="width: 180px;">
-        <input type="text" name="search" class="form-control" placeholder="搜索..." value="<%= search %>">
-        <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-search"></i></button>
-        <% if (search || sourceId) { %>
-          <a href="/news?status=<%= status %>" class="btn btn-outline-secondary" title="清除"><i class="bi bi-x"></i></a>
-        <% } %>
-      </div>
     </form>
     
     <!-- 操作按钮 -->
-    <button class="btn btn-primary btn-sm" onclick="fetchNews()">
+    <button class="btn btn-primary" onclick="fetchNews()">
       <i class="bi bi-cloud-download me-1"></i>抓取
     </button>
     <% if (status === 'pending') { %>
-      <button class="btn btn-info btn-sm text-white" onclick="batchRewrite()">
+      <button class="btn btn-info text-white" onclick="batchRewrite()">
         <i class="bi bi-magic me-1"></i>改写
       </button>
     <% } %>
     <% if (status === 'rewritten') { %>
-      <button class="btn btn-success btn-sm" onclick="batchPublish()">
+      <button class="btn btn-success" onclick="batchPublish()">
         <i class="bi bi-send me-1"></i>发布
       </button>
     <% } %>
-    <button class="btn btn-danger btn-sm" onclick="batchDelete()">
+    <button class="btn btn-danger" onclick="batchDelete()">
       <i class="bi bi-trash me-1"></i>删除
     </button>
   </div>
