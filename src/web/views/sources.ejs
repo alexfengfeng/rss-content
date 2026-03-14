@@ -1,0 +1,177 @@
+
+
+<div class="mb-4">
+  <h1 class="h3 mb-2">信源管理</h1>
+  <p class="text-muted">管理 RSS 新闻源，配置抓取规则</p>
+</div>
+
+<!-- 操作栏 -->
+<div class="action-bar">
+  <span class="text-muted">共 <%= sources.length %> 个信源</span>
+  <div class="ms-auto">
+    <a href="/sources/new" class="btn btn-primary">
+      <i class="bi bi-plus-lg me-2"></i>添加信源
+    </a>
+  </div>
+</div>
+
+<!-- 信源列表 -->
+<div class="content-card">
+  <div class="card-header">
+    <h5 class="card-title">
+      <i class="bi bi-rss text-primary me-2"></i>信源列表
+    </h5>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>状态</th>
+            <th>名称</th>
+            <th>类型</th>
+            <th>地址/路由</th>
+            <th>关键词过滤</th>
+            <th width="200">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (sources.length === 0) { %>
+            <tr>
+              <td colspan="6" class="text-center text-muted py-5">
+                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                暂无信源，请先添加
+              </td>
+            </tr>
+          <% } else { %>
+            <% sources.forEach(source => { %>
+              <% 
+                let keywords = [];
+                let blacklist = [];
+                try {
+                  keywords = source.keywords ? JSON.parse(source.keywords) : [];
+                  blacklist = source.blacklist ? JSON.parse(source.blacklist) : [];
+                } catch(e) {}
+              %>
+              <tr>
+                <td>
+                  <span class="badge <%= source.enabled ? 'bg-success' : 'bg-secondary' %>">
+                    <%= source.enabled ? '启用' : '禁用' %>
+                  </span>
+                </td>
+                <td>
+                  <strong><%= source.name %></strong>
+                </td>
+                <td>
+                  <span class="badge bg-light text-dark">
+                    <%= source.type === 'rsshub' ? 'RSSHub' : '标准 RSS' %>
+                  </span>
+                </td>
+                <td>
+                  <code class="text-break" style="font-size: 0.75rem;"><%= source.route %></code>
+                </td>
+                <td>
+                  <% if (keywords.length > 0) { %>
+                    <span class="badge bg-info text-white me-1" title="正向关键词">
+                      <i class="bi bi-funnel"></i> <%= keywords.length %>
+                    </span>
+                  <% } %>
+                  <% if (blacklist.length > 0) { %>
+                    <span class="badge bg-warning text-dark" title="黑名单">
+                      <i class="bi bi-shield-slash"></i> <%= blacklist.length %>
+                    </span>
+                  <% } %>
+                  <% if (keywords.length === 0 && blacklist.length === 0) { %>
+                    <span class="text-muted">-</span>
+                  <% } %>
+                </td>
+                <td>
+                  <button class="btn-action text-primary" onclick="fetchSource(<%= source.id %>)" title="抓取">
+                    <i class="bi bi-arrow-clockwise"></i>
+                  </button>
+                  <a href="/sources/<%= source.id %>/edit" class="btn-action" title="编辑">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+                  <button class="btn-action text-danger" onclick="deleteSource(<%= source.id %>, '<%= source.name.replace(/'/g, "\\'") %>')" title="删除">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </td>
+              </tr>
+            <% }); %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 使用说明 -->
+<div class="content-card mt-4">
+  <div class="card-header">
+    <h5 class="card-title">
+      <i class="bi bi-info-circle text-info me-2"></i>使用说明
+    </h5>
+  </div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-6">
+        <h6 class="fw-bold">信源类型</h6>
+        <ul class="list-unstyled text-muted">
+          <li><strong>标准 RSS</strong>：直接访问 RSS 地址，如 https://example.com/feed.xml</li>
+          <li><strong>RSSHub</strong>：通过 RSSHub 路由，如 /36kr/newsflashes</li>
+        </ul>
+      </div>
+      <div class="col-md-6">
+        <h6 class="fw-bold">关键词过滤</h6>
+        <ul class="list-unstyled text-muted">
+          <li><strong>正向关键词</strong>：只抓取包含这些词的新闻（空=全部抓取）</li>
+          <li><strong>黑名单</strong>：包含这些词的新闻会被过滤</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 抓取单个信源
+async function fetchSource(sourceId) {
+  const btn = event.target.closest('button');
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = '<i class="bi bi-arrow-clockwise spin"></i>';
+  btn.disabled = true;
+  
+  try {
+    await apiFetch('/api/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ sourceId })
+    });
+    showToast('抓取成功！', 'success');
+  } catch (error) {
+    btn.innerHTML = originalHtml;
+    btn.disabled = false;
+  }
+}
+
+// 删除信源
+async function deleteSource(sourceId, sourceName) {
+  if (!confirm('确定要删除信源「' + sourceName + '」吗？此操作不可恢复。')) return;
+  
+  try {
+    await apiFetch('/api/sources/' + sourceId, { method: 'DELETE' });
+    showToast('删除成功！', 'success');
+    setTimeout(() => location.reload(), 1000);
+  } catch (error) {
+    console.error(error);
+  }
+}
+</script>
+
+<style>
+.spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+</style>

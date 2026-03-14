@@ -1,0 +1,211 @@
+<% 
+const isEdit = !!source;
+const pageTitle = isEdit ? '编辑信源' : '添加信源';
+
+const sourceData = source || {
+  name: '',
+  type: 'rss',
+  route: '',
+  enabled: true,
+  keywords: '',
+  blacklist: ''
+};
+
+// 解析 keywords 和 blacklist
+let keywordsStr = '';
+let blacklistStr = '';
+try {
+  keywordsStr = sourceData.keywords ? JSON.parse(sourceData.keywords).join(', ') : '';
+  blacklistStr = sourceData.blacklist ? JSON.parse(sourceData.blacklist).join(', ') : '';
+} catch(e) {}
+%>
+
+<div class="mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/">首页</a></li>
+      <li class="breadcrumb-item"><a href="/sources">信源管理</a></li>
+      <li class="breadcrumb-item active" aria-current="page"><%= isEdit ? '编辑' : '添加' %></li>
+    </ol>
+  </nav>
+  <h1 class="h3 mb-2"><%= pageTitle %></h1>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="content-card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-rss text-primary me-2"></i><%= pageTitle %>
+        </h5>
+      </div>
+      <div class="card-body">
+        <form id="sourceForm" onsubmit="saveSource(event)">
+          <% if (isEdit) { %><input type="hidden" name="id" value="<%= source.id %>"><% } %>
+          
+          <!-- 基本信息 -->
+          <div class="mb-4">
+            <h6 class="fw-bold mb-3">基本信息</h6>
+            
+            <div class="mb-3">
+              <label class="form-label">信源名称 <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="name" value="<%= sourceData.name %>" required placeholder="如：36氪快讯">
+              <div class="form-text">用于标识此信源的名称</div>
+            </div>
+            
+            <div class="mb-3">
+              <label class="form-label">类型 <span class="text-danger">*</span></label>
+              <div class="d-flex gap-3">
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="type" value="rss" id="typeRss" <%= sourceData.type === 'rss' ? 'checked' : '' %>>
+                  <label class="form-check-label" for="typeRss">
+                    <strong>标准 RSS</strong>
+                    <div class="text-muted small">直接访问 RSS 地址</div>
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="type" value="rsshub" id="typeRsshub" <%= sourceData.type === 'rsshub' ? 'checked' : '' %>>
+                  <label class="form-check-label" for="typeRsshub">
+                    <strong>RSSHub</strong>
+                    <div class="text-muted small">通过 RSSHub 路由</div>
+                  </label>
+                </div>
+              </div>
+            </div>
+            
+            <div class="mb-3">
+              <label class="form-label">
+                <span id="routeLabel"><%= sourceData.type === 'rsshub' ? 'RSSHub 路由' : 'RSS 地址' %></span>
+                <span class="text-danger">*</span>
+              </label>
+              <input type="text" class="form-control" name="route" value="<%= sourceData.route %>" required 
+                placeholder="<%= sourceData.type === 'rsshub' ? '/36kr/newsflashes' : 'https://example.com/feed.xml' %>">
+              <div class="form-text" id="routeHelp">
+                <%= sourceData.type === 'rsshub' 
+                  ? 'RSSHub 路由，如：/36kr/newsflashes' 
+                  : '完整的 RSS 地址，如：https://www.solidot.org/index.rss' %>
+              </div>
+            </div>
+            
+            <div class="mb-3">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" name="enabled" id="enabledSwitch" <%= sourceData.enabled ? 'checked' : '' %>>
+                <label class="form-check-label" for="enabledSwitch">启用此信源</label>
+              </div>
+            </div>
+          </div>
+          
+          <hr class="my-4">
+          
+          <!-- 过滤规则 -->
+          <div class="mb-4">
+            <h6 class="fw-bold mb-3">过滤规则（可选）</h6>
+            
+            <div class="mb-3">
+              <label class="form-label">
+                <i class="bi bi-funnel text-info me-1"></i>正向关键词
+              </label>
+              <input type="text" class="form-control" name="keywords" value="<%= keywordsStr %>" 
+                placeholder="AI, 人工智能, 科技">
+              <div class="form-text">多个关键词用逗号分隔。只抓取包含这些关键词的新闻（留空则抓取全部）</div>
+            </div>
+            
+            <div class="mb-3">
+              <label class="form-label">
+                <i class="bi bi-shield-slash text-warning me-1"></i>黑名单关键词
+              </label>
+              <input type="text" class="form-control" name="blacklist" value="<%= blacklistStr %>" 
+                placeholder="广告, 推广, 招聘">
+              <div class="form-text">多个关键词用逗号分隔。包含这些关键词的新闻会被过滤</div>
+            </div>
+          </div>
+          
+          <!-- 按钮 -->
+          <div class="d-flex gap-2">
+            <a href="/sources" class="btn btn-outline-secondary">取消</a>
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg me-2"></i><%= isEdit ? '保存修改' : '添加信源' %>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    
+    <!-- 示例 -->
+    <div class="content-card mt-4">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-lightbulb text-warning me-2"></i>配置示例
+        </h5>
+      </div>
+      <div class="card-body">
+        <h6 class="fw-bold">示例 1：只抓取 AI 相关新闻</h6>
+        <ul class="text-muted small">
+          <li>名称：TechCrunch</li>
+          <li>类型：标准 RSS</li>
+          <li>地址：https://techcrunch.com/feed/</li>
+          <li>正向关键词：AI, artificial intelligence, ChatGPT</li>
+          <li>黑名单：sponsored, advertisement</li>
+        </ul>
+        
+        <h6 class="fw-bold mt-3">示例 2：抓取全部，过滤广告</h6>
+        <ul class="text-muted small">
+          <li>名称：Solidot</li>
+          <li>类型：标准 RSS</li>
+          <li>地址：https://www.solidot.org/index.rss</li>
+          <li>黑名单：广告, 推广, 招聘</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 类型切换时更新提示
+const typeRadios = document.querySelectorAll('input[name="type"]');
+const routeLabel = document.getElementById('routeLabel');
+const routeHelp = document.getElementById('routeHelp');
+const routeInput = document.querySelector('input[name="route"]');
+
+typeRadios.forEach(radio => {
+  radio.addEventListener('change', function() {
+    if (this.value === 'rsshub') {
+      routeLabel.textContent = 'RSSHub 路由';
+      routeHelp.textContent = 'RSSHub 路由，如：/36kr/newsflashes';
+      routeInput.placeholder = '/36kr/newsflashes';
+    } else {
+      routeLabel.textContent = 'RSS 地址';
+      routeHelp.textContent = '完整的 RSS 地址，如：https://www.solidot.org/index.rss';
+      routeInput.placeholder = 'https://example.com/feed.xml';
+    }
+  });
+});
+
+// 保存信源
+async function saveSource(event) {
+  event.preventDefault();
+  
+  const form = event.target;
+  const formData = new FormData(form);
+  const data = Object.fromEntries(formData.entries());
+  
+  // 处理 enabled 复选框
+  data.enabled = form.querySelector('input[name="enabled"]').checked;
+  
+  const isEditForm = !!data.id;
+  const url = isEditForm ? '/api/sources/' + data.id : '/api/sources';
+  const method = isEditForm ? 'PUT' : 'POST';
+  
+  try {
+    await apiFetch(url, {
+      method: method,
+      body: JSON.stringify(data)
+    });
+    
+    showToast(isEditForm ? '保存成功！' : '添加成功！', 'success');
+    setTimeout(() => location.href = '/sources', 1000);
+  } catch (error) {
+    console.error(error);
+  }
+}
+</script>

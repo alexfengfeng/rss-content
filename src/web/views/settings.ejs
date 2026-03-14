@@ -1,0 +1,171 @@
+
+
+<div class="mb-4">
+  <h1 class="h3 mb-2">系统配置</h1>
+  <p class="text-muted">查看和修改系统配置（需要编辑 .env 文件）</p>
+</div>
+
+<div class="row g-4">
+  <!-- LLM 配置 -->
+  <div class="col-lg-6">
+    <div class="content-card">
+      <div class="card-header bg-light">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-robot text-primary me-2"></i>大模型配置
+        </h5>
+      </div>
+      <div class="card-body">
+        <table class="table table-borderless">
+          <tr>
+            <td width="120" class="text-muted">API Key</td>
+            <td>
+              <code><%= settings.llmApiKey || '未配置' %></code>
+              <% if (!settings.llmApiKey) { %><span class="badge bg-danger ms-2">必需</span><% } %>
+            </td>
+          </tr>
+          <tr>
+            <td class="text-muted">模型</td>
+            <td><code><%= settings.llmModel %></code></td>
+          </tr>
+          <tr>
+            <td class="text-muted">API 地址</td>
+            <td><code><%= settings.llmBaseUrl %></code></td>
+          </tr>
+        </table>
+        <div class="alert alert-light">
+          <i class="bi bi-info-circle me-2"></i>
+          修改大模型配置需要编辑 <code>.env</code> 文件中的 <code>LLM_API_KEY</code>、<code>LLM_MODEL</code>、<code>LLM_BASE_URL</code>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 微信公众号配置 -->
+  <div class="col-lg-6">
+    <div class="content-card">
+      <div class="card-header bg-light">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-wechat text-success me-2"></i>微信公众号配置
+        </h5>
+      </div>
+      <div class="card-body">
+        <table class="table table-borderless">
+          <tr>
+            <td width="120" class="text-muted">API Key</td>
+            <td>
+              <code><%= settings.wechatApiKey || '未配置' %></code>
+              <% if (!settings.wechatApiKey) { %><span class="badge bg-danger ms-2">必需</span><% } %>
+            </td>
+          </tr>
+        </table>
+        <div class="alert alert-light">
+          <i class="bi bi-info-circle me-2"></i>
+          获取 API Key：访问 <a href="https://wx.limyai.com" target="_blank">wx.limyai.com</a> 授权公众号
+        </div>
+        <% if (!settings.wechatApiKey) { %>
+          <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            未配置微信公众号 API Key，无法发布文章
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- RSSHub 配置 -->
+  <div class="col-lg-6">
+    <div class="content-card">
+      <div class="card-header bg-light">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-rss text-warning me-2"></i>RSSHub 配置
+        </h5>
+      </div>
+      <div class="card-body">
+        <table class="table table-borderless">
+          <tr>
+            <td width="120" class="text-muted">服务地址</td>
+            <td><code><%= settings.rsshubUrl %></code></td>
+          </tr>
+        </table>
+        <div class="alert alert-light">
+          <i class="bi bi-info-circle me-2"></i>
+          如果使用 RSSHub 类型的信源，需要部署 RSSHub 服务
+        </div>
+        <div class="d-grid">
+          <a href="https://github.com/DIYgod/RSSHub" target="_blank" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-github me-2"></i>RSSHub 文档
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 抓取配置 -->
+  <div class="col-lg-6">
+    <div class="content-card">
+      <div class="card-header bg-light">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-gear text-secondary me-2"></i>抓取配置
+        </h5>
+      </div>
+      <div class="card-body">
+        <table class="table table-borderless">
+          <tr>
+            <td width="150" class="text-muted">每次抓取数量</td>
+            <td><code><%= settings.fetchLimit %></code> 条</td>
+          </tr>
+          <tr>
+            <td class="text-muted">每次改写数量</td>
+            <td><code><%= settings.rewriteBatchSize %></code> 条</td>
+          </tr>
+          <tr>
+            <td class="text-muted">每次发布数量</td>
+            <td><code><%= settings.publishBatchSize %></code> 条</td>
+          </tr>
+        </table>
+        <div class="alert alert-light">
+          <i class="bi bi-info-circle me-2"></i>
+          修改配置需要编辑 <code>.env</code> 文件
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 配置文件说明 -->
+<div class="content-card mt-4">
+  <div class="card-header">
+    <h5 class="card-title">
+      <i class="bi bi-file-code text-primary me-2"></i>.env 配置文件示例
+    </h5>
+  </div>
+  <div class="card-body">
+    <pre class="bg-light p-3 rounded"><code># ============================================
+# 大模型配置
+# ============================================
+LLM_API_KEY=sk-your-api-key-here
+LLM_MODEL=deepseek-chat
+LLM_BASE_URL=https://api.deepseek.com
+
+# ============================================
+# 微信公众号配置
+# ============================================
+WECHAT_API_KEY=your-wechat-api-key
+
+# ============================================
+# RSSHub 配置
+# ============================================
+RSSHUB_URL=http://localhost:1200
+
+# ============================================
+# 抓取配置
+# ============================================
+FETCH_LIMIT=20
+REWRITE_BATCH_SIZE=5
+PUBLISH_BATCH_SIZE=3</code></pre>
+    <div class="alert alert-info mt-3">
+      <i class="bi bi-info-circle me-2"></i>
+      配置文件位于项目根目录的 <code>.env</code> 文件。修改后需要重启服务才能生效。
+    </div>
+  </div>
+</div>

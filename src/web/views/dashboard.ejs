@@ -1,0 +1,276 @@
+
+
+<div class="mb-4">
+  <h1 class="h3 mb-2">仪表盘</h1>
+  <p class="text-muted">欢迎使用 <%= appName %>，这里是新闻采集与发布的管理中心</p>
+</div>
+
+<!-- 统计卡片 -->
+<div class="row g-4 mb-4">
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon bg-primary bg-opacity-10 text-primary">
+        <i class="bi bi-collection"></i>
+      </div>
+      <div class="stat-value"><%= stats.total %></div>
+      <div class="stat-label">总新闻数</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon bg-warning bg-opacity-10 text-warning">
+        <i class="bi bi-clock-history"></i>
+      </div>
+      <div class="stat-value"><%= stats.byStatus.pending || 0 %></div>
+      <div class="stat-label">待改写</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon bg-info bg-opacity-10 text-info">
+        <i class="bi bi-pencil-square"></i>
+      </div>
+      <div class="stat-value"><%= stats.byStatus.rewritten || 0 %></div>
+      <div class="stat-label">已改写</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon bg-success bg-opacity-10 text-success">
+        <i class="bi bi-check-circle"></i>
+      </div>
+      <div class="stat-value"><%= stats.byStatus.published || 0 %></div>
+      <div class="stat-label">已发布</div>
+    </div>
+  </div>
+</div>
+
+<!-- 快捷操作 -->
+<div class="action-bar">
+  <span class="text-muted">快捷操作：</span>
+  <button class="btn btn-primary" onclick="fetchNews()">
+    <i class="bi bi-cloud-download me-2"></i>抓取新闻
+  </button>
+  <button class="btn btn-info text-white" onclick="rewriteNews()">
+    <i class="bi bi-magic me-2"></i>AI 改写
+  </button>
+  <a href="/news?status=pending" class="btn btn-outline-primary">
+    <i class="bi bi-eye me-2"></i>查看待改写
+  </a>
+</div>
+
+<div class="row g-4">
+  <!-- 最新抓取 -->
+  <div class="col-lg-6">
+    <div class="content-card">
+      <div class="card-header">
+        <h5 class="card-title">
+          <i class="bi bi-clock text-primary me-2"></i>最新抓取
+        </h5>
+        <a href="/news?status=pending" class="btn btn-sm btn-outline-primary">查看全部</a>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>来源</th>
+                <th>标题</th>
+                <th>时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (recentNews.length === 0) { %>
+                <tr>
+                  <td colspan="4" class="text-center text-muted py-4">暂无待改写新闻</td>
+                </tr>
+              <% } else { %>
+                <% recentNews.forEach(news => { %>
+                  <tr>
+                    <td>
+                      <span class="badge bg-secondary"><%= news.source_name %></span>
+                    </td>
+                    <td>
+                      <a href="/news/<%= news.id %>" class="news-title" title="<%= news.title %>">
+                        <%= news.title.substring(0, 40) %><%= news.title.length > 40 ? '...' : '' %>
+                      </a>
+                    </td>
+                    <td class="text-muted"><%= news.pub_date ? new Date(news.pub_date).toLocaleDateString('zh-CN') : '-' %></td>
+                    <td>
+                      <a href="/news/<%= news.id %>" class="btn-action" title="查看">
+                        <i class="bi bi-eye"></i>
+                      </a>
+                    </td>
+                  </tr>
+                <% }); %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 已改写待发布 -->
+  <div class="col-lg-6">
+    <div class="content-card">
+      <div class="card-header">
+        <h5 class="card-title">
+          <i class="bi bi-check2-circle text-success me-2"></i>已改写待发布
+        </h5>
+        <a href="/news?status=rewritten" class="btn btn-sm btn-outline-success">查看全部</a>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>来源</th>
+                <th>改写标题</th>
+                <th>改写时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (rewrittenNews.length === 0) { %>
+                <tr>
+                  <td colspan="4" class="text-center text-muted py-4">暂无已改写新闻</td>
+                </tr>
+              <% } else { %>
+                <% rewrittenNews.forEach(news => { %>
+                  <tr>
+                    <td>
+                      <span class="badge bg-secondary"><%= news.source_name %></span>
+                    </td>
+                    <td>
+                      <a href="/news/<%= news.id %>" class="news-title" title="<%= news.rewritten_title || news.title %>">
+                        <% const displayTitle = news.rewritten_title || news.title; %>
+                        <%= displayTitle.substring(0, 40) %><%= displayTitle.length > 40 ? '...' : '' %>
+                      </a>
+                    </td>
+                    <td class="text-muted"><%= news.rewritten_at ? new Date(news.rewritten_at).toLocaleDateString('zh-CN') : '-' %></td>
+                    <td>
+                      <button class="btn-action text-success" onclick="publishNews(<%= news.id %>)" title="发布">
+                        <i class="bi bi-send"></i>
+                      </button>
+                      <a href="/news/<%= news.id %>" class="btn-action" title="查看">
+                        <i class="bi bi-eye"></i>
+                      </a>
+                    </td>
+                  </tr>
+                <% }); %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 信源状态 -->
+<div class="content-card mt-4">
+  <div class="card-header">
+    <h5 class="card-title">
+      <i class="bi bi-rss text-primary me-2"></i>信源状态
+    </h5>
+    <a href="/sources" class="btn btn-sm btn-outline-primary">管理信源</a>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <% sources.forEach(source => { %>
+        <div class="col-md-4 col-lg-3">
+          <div class="d-flex align-items-center p-3 bg-light rounded">
+            <div class="flex-shrink-0">
+              <span class="badge <%= source.enabled ? 'bg-success' : 'bg-secondary' %>">
+                <%= source.enabled ? '启用' : '禁用' %>
+              </span>
+            </div>
+            <div class="flex-grow-1 ms-3">
+              <h6 class="mb-0"><%= source.name %></h6>
+              <small class="text-muted"><%= source.type === 'rsshub' ? 'RSSHub' : 'RSS' %></small>
+            </div>
+            <button class="btn-action" onclick="fetchSource(<%= source.id %>)" title="抓取">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+          </div>
+        </div>
+      <% }); %>
+    </div>
+  </div>
+</div>
+
+<script>
+// 抓取所有新闻
+async function fetchNews() {
+  const btn = event.target.closest('button');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-arrow-clockwise spin me-2"></i>抓取中...';
+  
+  try {
+    await apiFetch('/api/fetch', { method: 'POST' });
+    showToast('抓取成功！', 'success');
+    setTimeout(() => location.reload(), 1000);
+  } catch (error) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-cloud-download me-2"></i>抓取新闻';
+  }
+}
+
+// 抓取单个信源
+async function fetchSource(sourceId) {
+  try {
+    await apiFetch('/api/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ sourceId })
+    });
+    showToast('抓取成功！', 'success');
+    setTimeout(() => location.reload(), 1000);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// AI 改写
+async function rewriteNews() {
+  const btn = event.target.closest('button');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-arrow-clockwise spin me-2"></i>改写中...';
+  
+  try {
+    await apiFetch('/api/rewrite', { method: 'POST' });
+    showToast('改写成功！', 'success');
+    setTimeout(() => location.reload(), 1000);
+  } catch (error) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-magic me-2"></i>AI 改写';
+  }
+}
+
+// 发布新闻
+async function publishNews(newsId) {
+  if (!confirm('确定要发布到微信公众号吗？')) return;
+  
+  try {
+    await apiFetch('/api/publish', {
+      method: 'POST',
+      body: JSON.stringify({ newsId })
+    });
+    showToast('发布成功！', 'success');
+    setTimeout(() => location.reload(), 1000);
+  } catch (error) {
+    console.error(error);
+  }
+}
+</script>
+
+<style>
+.spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+</style>

@@ -1,0 +1,142 @@
+<% 
+const pageTitle = '编辑新闻';
+const isRewritten = news.status === 'rewritten' || news.status === 'published';
+%>
+
+<div class="mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/">首页</a></li>
+      <li class="breadcrumb-item"><a href="/news">新闻管理</a></li>
+      <li class="breadcrumb-item"><a href="/news/<%= news.id %>">新闻详情</a></li>
+      <li class="breadcrumb-item active" aria-current="page">编辑</li>
+    </ol>
+  </nav>
+  <h1 class="h3 mb-2"><%= pageTitle %></h1>
+</div>
+
+<div class="row g-4">
+  <!-- 左侧：原文编辑 -->
+  <div class="col-lg-6">
+    <div class="content-card">
+      <div class="card-header bg-light">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-file-text text-primary me-2"></i>原文信息
+        </h5>
+      </div>
+      <div class="card-body">
+        <form id="originalForm">
+          <div class="mb-3">
+            <label class="form-label">原标题</label>
+            <input type="text" class="form-control" name="title" value="<%= news.title %>" required>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label">原文摘要</label>
+            <textarea class="form-control" name="description" rows="10" required><%= news.description || '' %></textarea>
+            <div class="form-text">支持纯文本格式</div>
+          </div>
+          
+          <div class="d-flex gap-2">
+            <a href="/news/<%= news.id %>" class="btn btn-outline-secondary">取消</a>
+            <button type="submit" class="btn btn-primary">保存原文修改</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右侧：改写内容编辑 -->
+  <div class="col-lg-6">
+    <div class="content-card">
+      <div class="card-header bg-light">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-magic text-info me-2"></i>改写内容
+          <% if (!isRewritten) { %>
+            <span class="badge bg-warning text-dark ms-2">尚未改写</span>
+          <% } %>
+        </h5>
+      </div>
+      <div class="card-body">
+        <% if (isRewritten) { %>
+          <form id="rewriteForm">
+            <div class="mb-3">
+              <label class="form-label">改写标题</label>
+              <input type="text" class="form-control" name="rewritten_title" value="<%= news.rewritten_title || '' %>" required>
+            </div>
+            
+            <div class="mb-3">
+              <label class="form-label">改写正文</label>
+              <textarea class="form-control" name="rewritten_content" rows="15" required><%= news.rewritten_content || '' %></textarea>
+              <div class="form-text">支持 Markdown 格式</div>
+            </div>
+            
+            <div class="d-flex gap-2">
+              <a href="/news/<%= news.id %>" class="btn btn-outline-secondary">取消</a>
+              <button type="submit" class="btn btn-info text-white">保存改写内容</button>
+            </div>
+          </form>
+        <% } else { %>
+          <div class="text-center py-5">
+            <i class="bi bi-magic fs-1 text-muted mb-3 d-block"></i>
+            <p class="text-muted">此新闻尚未改写</p>
+            <p class="text-muted small">请先使用 AI 改写功能生成改写内容</p>
+            <a href="/news/<%= news.id %>" class="btn btn-outline-primary">返回详情页</a>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 提交原文修改
+document.getElementById('originalForm')?.addEventListener('submit', async function(e) {
+  e.preventDefault();
+  
+  const formData = new FormData(this);
+  const data = {
+    title: formData.get('title'),
+    description: formData.get('description')
+  };
+  
+  try {
+    await apiFetch('/api/news/<%= news.id %>', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+    showToast('原文修改成功！', 'success');
+  } catch (error) {
+    console.error(error);
+  }
+});
+
+// 提交改写内容修改
+document.getElementById('rewriteForm')?.addEventListener('submit', async function(e) {
+  e.preventDefault();
+  
+  const formData = new FormData(this);
+  const data = {
+    rewritten_title: formData.get('rewritten_title'),
+    rewritten_content: formData.get('rewritten_content')
+  };
+  
+  try {
+    await apiFetch('/api/news/<%= news.id %>', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+    showToast('改写内容保存成功！', 'success');
+  } catch (error) {
+    console.error(error);
+  }
+});
+</script>
+
+<style>
+textarea.form-control {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+  resize: vertical;
+}
+</style>

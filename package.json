@@ -1,0 +1,35 @@
+{
+  "name": "news-to-wechat",
+  "version": "1.0.0",
+  "description": "新闻抓取 + AI改写 + 公众号发布自动化工具",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "web": "node src/web/index.js",
+    "fetch": "node src/scripts/fetchNews.js",
+    "rewrite": "node src/scripts/rewriteNews.js",
+    "publish": "node src/scripts/publishToWechat.js",
+    "dev": "node src/scripts/devMode.js",
+    "init": "node src/scripts/initSources.js",
+    "view": "node src/scripts/viewNews.js"
+  },
+  "keywords": [
+    "news",
+    "rss",
+    "wechat",
+    "ai"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.0",
+    "ejs": "^5.0.1",
+    "express": "^5.2.1",
+    "express-ejs-layouts": "^2.5.1",
+    "method-override": "^3.0.0",
+    "node-cron": "^3.0.3",
+    "rss-parser": "^3.13.0",
+    "sqlite3": "^5.1.6"
+  }
+}
