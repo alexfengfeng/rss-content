@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const path = require('path');
 const methodOverride = require('method-override');
@@ -494,7 +496,6 @@ function startWebServer() {
 
 // 如果直接运行此文件
 if (require.main === module) {
-  require('dotenv').config();
   startWebServer();
 }
 

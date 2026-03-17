@@ -15,9 +15,9 @@ async function main() {
     logger.info('========== 开始发布到微信公众号 ==========');
     
     // 获取已改写待发布的新闻
-    const rewrittenNews = db.getRewrittenNews(PUBLISH_BATCH_SIZE);
+    const rewrittenNews = await db.getRewrittenNews(PUBLISH_BATCH_SIZE);
     
-    if (rewrittenNews.length === 0) {
+    if (!rewrittenNews || rewrittenNews.length === 0) {
       logger.info('没有待发布的新闻，请先运行改写脚本');
       process.exit(0);
     }
@@ -29,23 +29,32 @@ async function main() {
     
     for (const news of rewrittenNews) {
       try {
-        logger.info(`[${successCount + failCount + 1}/${rewrittenNews.length}] 发布: ${news.rewritten_title?.substring(0, 40) || news.title.substring(0, 40)}...`);
+        logger.info(`[${successCount + failCount + 1}/${rewrittenNews.length}] 发布：${news.rewritten_title?.substring(0, 40) || news.title.substring(0, 40)}...`);
         
-        // 构建文章内容
+        // 构建文章内容（转换为 HTML 格式）
         const title = news.rewritten_title || news.title;
         const content = news.rewritten_content || news.description;
-        const fullContent = `${content}\n\n---\n\n*原文链接: [点击查看](${news.link})*\n\n*文章来源: ${news.source_name}*`;
+        
+        // 简单 Markdown 转 HTML
+        let htmlContent = content
+          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*(.*?)\*/g, '<em>$1</em>')
+          .replace(/\n/g, '<br>')
+          .replace(/---/g, '<hr>')
+          .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2">$1</a>');
+        
+        htmlContent += `<br><br><hr><br>原文链接：<a href="${news.link}">点击查看</a><br>文章来源：${news.source_name}`;
         
         const result = await publishArticle({
           title,
-          content: fullContent,
+          content: htmlContent,
           summary: content.substring(0, 120)
         });
         
         // 更新发布状态
-        db.updatePublishedStatus(news.id, result.mediaId);
+        await db.updatePublishedStatus(news.id, result.mediaId);
         
-        logger.info(`  ✓ 发布成功, MediaID: ${result.mediaId}`);
+        logger.info(`  ✓ 发布成功，MediaID: ${result.mediaId}`);
         successCount++;
         
         // 避免过快调用 API
@@ -53,19 +62,19 @@ async function main() {
           await new Promise(r => setTimeout(r, 3000));
         }
       } catch (error) {
-        logger.error(`  ✗ 发布失败: ${error.message}`);
-        db.updateFailedStatus(news.id, error.message);
+        logger.error(`  ✗ 发布失败：${error.message}`);
+        await db.updateFailedStatus(news.id, error.message);
         failCount++;
       }
     }
     
     logger.info('========== 发布完成 ==========');
-    logger.info(`成功: ${successCount} 条`);
-    logger.info(`失败: ${failCount} 条`);
+    logger.info(`成功：${successCount} 条`);
+    logger.info(`失败：${failCount} 条`);
     
     if (successCount > 0) {
       logger.info('');
-      logger.info('提示: 请登录微信公众平台查看草稿箱并手动发布文章');
+      logger.info('提示：请登录微信公众平台查看草稿箱并手动发布文章');
     }
     
     process.exit(0);

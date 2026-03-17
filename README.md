@@ -28,15 +28,20 @@ cp .env.example .env
 # 编辑 .env 文件，填入你的 API Keys
 ```
 
-必需配置：
-- `LLM_API_KEY` - 大模型 API Key (支持 DeepSeek, OpenAI 等)
-- `LLM_MODEL` - 模型名称，如 `deepseek-chat`
-- `LLM_BASE_URL` - API 地址，如 `https://api.deepseek.com`
-- `WECHAT_API_KEY` - 微信公众号 API Key (从 [wx.limyai.com](https://wx.limyai.com) 获取)
+**必需配置：**
 
-可选配置：
-- `WECHAT_APPID` - 指定发布到哪个公众号（不填会自动选择）
+| 变量 | 说明 | 获取方式 |
+|------|------|----------|
+| `LLM_API_KEY` | 大模型 API Key | DeepSeek/通义千问等 |
+| `LLM_MODEL` | 模型名称 | 如 `deepseek-chat` |
+| `LLM_BASE_URL` | API 地址 | 如 `https://api.deepseek.com` |
+| `WECHAT_APPID` | 公众号 APPID | 微信公众平台 -> 开发 -> 基本配置 |
+| `WECHAT_APPSECRET` | 公众号密钥 | 微信公众平台 -> 开发 -> 基本配置 |
+
+**可选配置：**
 - `RSSHUB_URL` - RSSHub 地址（默认 `http://localhost:1200`）
+
+📖 **详细配置指南：** 查看 [docs/WECHAT_OFFICIAL_SETUP.md](docs/WECHAT_OFFICIAL_SETUP.md)
 
 ### 3. 初始化新闻源
 
@@ -314,12 +319,34 @@ news-to-wechat/
 └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
 ```
 
-## 微信公众号 API Key 获取
+## 微信公众号配置（官方 API）
 
-1. 访问 [wx.limyai.com](https://wx.limyai.com)
-2. 使用微信扫码登录
-3. 授权你的公众号
-4. 在控制台获取 API Key
+### ⚠️ 重要：公众号类型限制
+
+本项目使用微信官方 **草稿箱接口** (`/cgi-bin/draft/add`)，该接口有以下限制：
+
+| 公众号类型 | 草稿箱接口支持 | 说明 |
+|-----------|--------------|------|
+| ✅ 认证服务号 | 支持 | 推荐使用，完整 API 支持 |
+| ❌ 订阅号 | 不支持 | 会返回 `40007` 或 `48001` 错误 |
+
+**如果你是订阅号用户：**
+- 可以使用 `npm run publish:sub` 直接发布，不保存草稿
+- 或生成 HTML 后手动复制到公众号编辑器
+
+### 获取 APPID 和 APPSECRET
+
+1. 登录微信公众平台：https://mp.weixin.qq.com
+2. 点击左侧菜单 **开发** -> **基本配置**
+3. 复制 **APPID(应用 ID)** -> 填入 `.env` 的 `WECHAT_APPID`
+4. 点击 **生成并重置** 获取 **APPSECRET(应用密钥)** -> 填入 `.env` 的 `WECHAT_APPSECRET`
+
+⚠️ **重要提示：**
+- APPSECRET 只显示一次，请妥善保存！
+- 建议配置 IP 白名单增强安全性
+- 确保你的公众号是**认证服务号**，否则草稿箱接口无法使用
+
+📖 **详细步骤：** 查看 [docs/WECHAT_OFFICIAL_SETUP.md](docs/WECHAT_OFFICIAL_SETUP.md)
 
 ## 常见问题
 

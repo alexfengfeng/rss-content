@@ -1,0 +1,42 @@
+[
+  {
+    "name": "BBC中文",
+    "type": "rss",
+    "route": "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml",
+    "enabled": true,
+    "keywords": [],
+    "blacklist": []
+  },
+  {
+    "name": "Solidot",
+    "type": "rss",
+    "route": "https://www.solidot.org/index.rss",
+    "enabled": true,
+    "keywords": [],
+    "blacklist": ["广告"]
+  },
+  {
+    "name": "TechCrunch",
+    "type": "rss",
+    "route": "https://techcrunch.com/feed/",
+    "enabled": true,
+    "keywords": ["AI", "artificial intelligence", "startup"],
+    "blacklist": []
+  },
+  {
+    "name": "36氪快讯",
+    "type": "rsshub",
+    "route": "/36kr/newsflashes",
+    "enabled": false,
+    "keywords": [],
+    "blacklist": []
+  },
+  {
+    "name": "HackerNews",
+    "type": "rsshub",
+    "route": "/hackernews",
+    "enabled": false,
+    "keywords": [],
+    "blacklist": []
+  }
+]

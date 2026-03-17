@@ -4,7 +4,7 @@ const path = require('path');
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data/news.db');
 const db = new sqlite3.Database(DB_PATH);
 
-// 删除 GitHub Trending
+// 删除无效的 GitHub Trending 源
 db.run("DELETE FROM sources WHERE name LIKE '%GitHub Trending%'", function(err) {
   if (err) console.error('删除失败:', err);
   else console.log('已删除 GitHub Trending 信源');
@@ -12,14 +12,6 @@ db.run("DELETE FROM sources WHERE name LIKE '%GitHub Trending%'", function(err) 
 
 // 添加新的信源
 const newSources = [
-  {
-    name: 'GitHub Trending（Atom）',
-    type: 'rss',
-    route: 'https://github-trending.atom',
-    enabled: 1,
-    keywords: ['JavaScript', 'Python', 'AI', 'tool', 'framework'],
-    blacklist: []
-  },
   {
     name: '开源中国资讯',
     type: 'rss',
@@ -54,40 +46,40 @@ const newSources = [
   },
   {
     name: 'GitHub Release - React',
-    type: 'rsshub',
-    route: '/github/release/facebook/react',
+    type: 'rss',
+    route: 'https://github.com/facebook/react/releases.atom',
     enabled: 1,
     keywords: ['release', 'v18', 'v19'],
     blacklist: []
   },
   {
     name: 'GitHub Release - Vue',
-    type: 'rsshub',
-    route: '/github/release/vuejs/core',
+    type: 'rss',
+    route: 'https://github.com/vuejs/core/releases.atom',
     enabled: 1,
     keywords: ['release', 'v3'],
     blacklist: []
   },
   {
     name: 'GitHub Release - VS Code',
-    type: 'rsshub',
-    route: '/github/release/microsoft/vscode',
+    type: 'rss',
+    route: 'https://github.com/microsoft/vscode/releases.atom',
     enabled: 1,
     keywords: ['release', 'update'],
     blacklist: []
   },
   {
     name: 'GitHub Release - Node.js',
-    type: 'rsshub',
-    route: '/github/release/nodejs/node',
+    type: 'rss',
+    route: 'https://github.com/nodejs/node/releases.atom',
     enabled: 1,
     keywords: ['release', 'v20', 'v22'],
     blacklist: []
   },
   {
     name: 'GitHub Release - TypeScript',
-    type: 'rsshub',
-    route: '/github/release/microsoft/TypeScript',
+    type: 'rss',
+    route: 'https://github.com/microsoft/TypeScript/releases.atom',
     enabled: 1,
     keywords: ['release', 'v5'],
     blacklist: []

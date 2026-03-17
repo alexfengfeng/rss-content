@@ -82,7 +82,7 @@ try {
                 placeholder="<%= sourceData.type === 'rsshub' ? '/36kr/newsflashes' : 'https://example.com/feed.xml' %>">
               <div class="form-text" id="routeHelp">
                 <%= sourceData.type === 'rsshub' 
-                  ? 'RSSHub 路由，如：/36kr/newsflashes' 
+                  ? 'RSSHub 路由或完整 URL，如：/36kr/newsflashes 或 https://rsshub.app/36kr/newsflashes' 
                   : '完整的 RSS 地址，如：https://www.solidot.org/index.rss' %>
               </div>
             </div>
@@ -171,7 +171,7 @@ typeRadios.forEach(radio => {
   radio.addEventListener('change', function() {
     if (this.value === 'rsshub') {
       routeLabel.textContent = 'RSSHub 路由';
-      routeHelp.textContent = 'RSSHub 路由，如：/36kr/newsflashes';
+      routeHelp.textContent = 'RSSHub 路由或完整 URL，如：/36kr/newsflashes 或 https://rsshub.app/36kr/newsflashes';
       routeInput.placeholder = '/36kr/newsflashes';
     } else {
       routeLabel.textContent = 'RSS 地址';

@@ -4,27 +4,27 @@ const path = require('path');
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data/news.db');
 const db = new sqlite3.Database(DB_PATH);
 
-// 将 GitHub Release 源改为直接使用 rsshub.app 的完整 URL
+// 将 GitHub Release 源改为 GitHub 原生 Atom feed，避免公共 RSSHub 被 403 拦截
 const updates = [
   {
     oldName: 'GitHub Release - React',
-    newRoute: 'https://rsshub.app/github/release/facebook/react'
+    newRoute: 'https://github.com/facebook/react/releases.atom'
   },
   {
     oldName: 'GitHub Release - Vue',
-    newRoute: 'https://rsshub.app/github/release/vuejs/core'
+    newRoute: 'https://github.com/vuejs/core/releases.atom'
   },
   {
     oldName: 'GitHub Release - VS Code',
-    newRoute: 'https://rsshub.app/github/release/microsoft/vscode'
+    newRoute: 'https://github.com/microsoft/vscode/releases.atom'
   },
   {
     oldName: 'GitHub Release - Node.js',
-    newRoute: 'https://rsshub.app/github/release/nodejs/node'
+    newRoute: 'https://github.com/nodejs/node/releases.atom'
   },
   {
     oldName: 'GitHub Release - TypeScript',
-    newRoute: 'https://rsshub.app/github/release/microsoft/TypeScript'
+    newRoute: 'https://github.com/microsoft/TypeScript/releases.atom'
   }
 ];
 

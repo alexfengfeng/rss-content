@@ -1,139 +1,231 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
-const { execSync } = require('child_process');
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
 
-const WECHAT_API_KEY = process.env.WECHAT_API_KEY;
+// 微信官方 API 配置
 const WECHAT_APPID = process.env.WECHAT_APPID;
-const API_BASE = 'https://wx.limyai.com/api/openapi';
+const WECHAT_APPSECRET = process.env.WECHAT_APPSECRET;
+
+// 微信官方 API 基础 URL
+const API_BASE = 'https://api.weixin.qq.com/cgi-bin';
+
+// Access token 缓存
+let accessTokenCache = {
+  token: null,
+  expiresAt: 0
+};
+
+// 默认封面 media_id 缓存（避免重复上传）
+let defaultCoverMediaId = null;
 
 // 检查配置
 function checkConfig() {
-  if (!WECHAT_API_KEY) {
-    throw new Error('WECHAT_API_KEY 未配置，请设置环境变量');
+  if (!WECHAT_APPID) {
+    throw new Error('WECHAT_APPID 未配置，请设置环境变量');
+  }
+  if (!WECHAT_APPSECRET) {
+    throw new Error('WECHAT_APPSECRET 未配置，请设置环境变量');
   }
   return true;
 }
 
-// 获取公众号列表
-async function listAccounts() {
+/**
+ * 获取 Access Token
+ */
+async function getAccessToken() {
   checkConfig();
 
+  const now = Date.now();
+  if (accessTokenCache.token && now < accessTokenCache.expiresAt) {
+    logger.debug('使用缓存的 access_token');
+    return accessTokenCache.token;
+  }
+
   try {
-    const resp = await axios.post(`${API_BASE}/wechat-accounts`, {}, {
-      headers: { 'X-API-Key': WECHAT_API_KEY }
+    logger.info('正在获取新的 access_token...');
+    
+    const resp = await axios.get(`${API_BASE}/token`, {
+      params: {
+        grant_type: 'client_credential',
+        appid: WECHAT_APPID,
+        secret: WECHAT_APPSECRET
+      },
+      timeout: 10000
     });
 
-    if (resp.data.success) {
-      return resp.data.data.accounts;
+    const data = resp.data;
+    
+    if (data.errcode) {
+      throw new Error(`获取 access_token 失败：${data.errmsg}`);
     }
-    throw new Error(resp.data.message || '获取账号列表失败');
+
+    accessTokenCache.token = data.access_token;
+    accessTokenCache.expiresAt = now + (data.expires_in - 300) * 1000;
+    
+    logger.info(`access_token 获取成功，有效期 ${data.expires_in} 秒`);
+    return data.access_token;
   } catch (error) {
-    logger.error('获取公众号列表失败:', error.response?.data || error.message);
+    logger.error('获取 access_token 失败:', error.response?.data || error.message);
     throw error;
   }
 }
 
-// 发布文章到公众号
-async function publishArticle({ title, content, summary, author = '', coverImage = '' }) {
-  checkConfig();
+/**
+ * 上传永久素材到微信（用于草稿箱封面）
+ */
+async function uploadPermanentMaterial(imageUrl, type = 'image') {
+  const accessToken = await getAccessToken();
+  
+  let imageData;
+  let filename;
 
-  // 如果没有指定 APPID，获取第一个账号
-  let appid = WECHAT_APPID;
-  if (!appid) {
-    const accounts = await listAccounts();
-    if (accounts.length === 0) {
-      throw new Error('没有找到授权的公众号，请先在 wx.limyai.com 授权');
-    }
-    if (accounts.length === 1) {
-      appid = accounts[0].wechatAppid;
-      logger.info(`使用默认公众号: ${accounts[0].name}`);
+  // 处理 data URI
+  if (imageUrl.startsWith('data:image')) {
+    const matches = imageUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+    if (matches) {
+      imageData = Buffer.from(matches[2], 'base64');
+      filename = `material.${matches[1]}`;
     } else {
-      // 多个账号时，列出供选择（这里简化处理，使用第一个）
-      appid = accounts[0].wechatAppid;
-      logger.info(`多个公众号可用，使用: ${accounts[0].name}`);
-      logger.info('其他可用公众号:');
-      accounts.slice(1).forEach(a => logger.info(`  - ${a.name} (${a.wechatAppid})`));
+      throw new Error('无效的 data URI 格式');
     }
+  } else if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    const resp = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+    imageData = resp.data;
+    filename = 'material.jpg';
+  } else {
+    imageData = fs.readFileSync(imageUrl);
+    filename = path.basename(imageUrl);
   }
 
-  const payload = {
-    wechatAppid: appid,
-    title: title.substring(0, 64), // 微信限制标题64字
-    content,
-    contentFormat: 'markdown',
-    articleType: 'news',
-    publish: false // 默认保存到草稿箱
-  };
+  const FormData = require('form-data');
+  const form = new FormData();
+  form.append('media', Buffer.from(imageData), { filename });
 
-  if (summary) payload.summary = summary.substring(0, 120);
-  if (author) payload.author = author;
-  if (coverImage) payload.coverImage = coverImage;
-
-  try {
-    logger.info(`正在发布文章到公众号: ${title.substring(0, 30)}...`);
-    
-    const resp = await axios.post(`${API_BASE}/wechat-publish`, payload, {
-      headers: { 
-        'X-API-Key': WECHAT_API_KEY,
-        'Content-Type': 'application/json'
-      },
-      timeout: 60000
-    });
-
-    if (resp.data.success) {
-      logger.info('文章发布成功:', resp.data.data.mediaId);
-      return {
-        success: true,
-        mediaId: resp.data.data.mediaId,
-        publicationId: resp.data.data.publicationId
-      };
+  const resp = await axios.post(
+    `${API_BASE}/material/add_material?access_token=${accessToken}&type=${type}`,
+    form,
+    {
+      headers: form.getHeaders(),
+      timeout: 30000
     }
-    throw new Error(resp.data.message || '发布失败');
+  );
+
+  const data = resp.data;
+  
+  if (data.errcode) {
+    throw new Error(`上传永久素材失败：${data.errmsg}`);
+  }
+
+  logger.info(`永久素材上传成功，media_id: ${data.media_id}`);
+  return data.media_id;
+}
+
+/**
+ * 发布文章到公众号草稿箱
+ * 注意：草稿箱接口仅对认证服务号开放，订阅号无法使用
+ */
+async function publishArticle({ 
+  title, 
+  content, 
+  summary = '', 
+  author = '', 
+  coverImage = '',
+  toSend = false 
+}) {
+  try {
+    const accessToken = await getAccessToken();
+
+    // 处理封面图片（使用缓存避免重复上传）
+    // thumb_media_id 是必填项！
+    let thumbMediaId = '';
+    
+    try {
+      if (coverImage) {
+        thumbMediaId = await uploadPermanentMaterial(coverImage, 'image');
+      } else {
+        // 使用缓存的默认封面 media_id（使用 640x400 的渐变色图片，微信要求封面至少 360x200）
+        if (!defaultCoverMediaId) {
+          // 使用一个外部的科技蓝渐变占位图
+          const defaultCover = 'https://picsum.photos/640/400';
+          defaultCoverMediaId = await uploadPermanentMaterial(defaultCover, 'image');
+          logger.info('默认封面已缓存，media_id:', defaultCoverMediaId);
+        }
+        thumbMediaId = defaultCoverMediaId;
+      }
+    } catch (error) {
+      logger.error('封面图片上传失败:', error.message);
+      throw new Error(`封面上传失败：${error.message}`);
+    }
+
+    if (!thumbMediaId) {
+      throw new Error('封面图片 media_id 不能为空');
+    }
+
+    // 构建图文消息
+    // 注意：微信接口对参数名敏感，必须使用下划线格式
+    const article = {
+      title: title.substring(0, 64),
+      author: author ? author.substring(0, 16) : '',
+      digest: summary.substring(0, 120),
+      content: content,
+      thumb_media_id: thumbMediaId,
+      show_cover_pic: 1,
+      need_open_comment: 0,
+      only_fans_can_comment: 0
+    };
+
+    // 调用新增草稿接口
+    // 必须使用正确的 Content-Type 和 UTF-8 编码，否则中文内容会导致 40007 错误
+    const payload = { articles: [article] };
+    logger.info('请求 payload:', JSON.stringify(payload, null, 2));
+    
+    const resp = await axios.post(
+      `${API_BASE}/draft/add?access_token=${accessToken}`,
+      JSON.stringify(payload),
+      { 
+        timeout: 30000,
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8'
+        }
+      }
+    );
+
+    const data = resp.data;
+    
+    logger.info('微信 API 响应:', JSON.stringify(data));
+    
+    if (data.errcode) {
+      // 针对特定错误码提供更详细的提示
+      if (data.errcode === 40007) {
+        throw new Error(`发布失败：无效的 media_id。可能原因：\n` +
+          `1. 订阅号没有草稿箱接口权限（仅认证服务号可用）\n` +
+          `2. thumb_media_id 对应的素材已过期或不存在\n` +
+          `3. 请求编码问题（中文内容需要 UTF-8 编码）\n` +
+          `错误详情：${data.errmsg} (rid: ${data.rid})`);
+      }
+      if (data.errcode === 48001) {
+        throw new Error(`发布失败：API 功能未授权。订阅号无法使用草稿箱接口，仅认证服务号可用。`);
+      }
+      throw new Error(`发布失败：${data.errmsg} (errcode: ${data.errcode}, rid: ${data.rid})`);
+    }
+
+    logger.info(`文章发布成功，media_id: ${data.media_id}`);
+    
+    return {
+      success: true,
+      mediaId: data.media_id,
+      url: `https://mp.weixin.qq.com/s?__biz=${WECHAT_APPID}&mid=100000000&idx=1&sn=xxx`
+    };
   } catch (error) {
     logger.error('发布文章失败:', error.response?.data || error.message);
     throw error;
   }
 }
 
-// 使用本地脚本发布（备用方案）
-async function publishWithLocalScript({ title, content, coverImagePath }) {
-  // 创建临时 markdown 文件
-  const tempDir = path.join(__dirname, '../../temp');
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true });
-  }
-
-  const mdFile = path.join(tempDir, `article-${Date.now()}.md`);
-  const mdContent = `# ${title}\n\n${content}`;
-  fs.writeFileSync(mdFile, mdContent, 'utf-8');
-
-  try {
-    // 构建命令
-    let cmd = `python "${path.join(__dirname, '../../../.agents/skills/wechat-article-publisher/scripts/wechat_api.py')}" publish --appid ${WECHAT_APPID || ''} --markdown "${mdFile}"`;
-    
-    if (coverImagePath) {
-      cmd += ` --cover "${coverImagePath}"`;
-    }
-
-    logger.info('执行发布命令...');
-    const result = execSync(cmd, { encoding: 'utf-8', cwd: process.cwd() });
-    
-    // 清理临时文件
-    fs.unlinkSync(mdFile);
-    
-    return { success: true, output: result };
-  } catch (error) {
-    // 清理临时文件
-    if (fs.existsSync(mdFile)) {
-      fs.unlinkSync(mdFile);
-    }
-    throw error;
-  }
-}
-
-// 批量发布
+/**
+ * 批量发布
+ */
 async function batchPublish(articles) {
   const results = [];
   
@@ -151,7 +243,6 @@ async function batchPublish(articles) {
         mediaId: result.mediaId
       });
       
-      // 避免过快调用
       await new Promise(r => setTimeout(r, 2000));
     } catch (error) {
       results.push({
@@ -165,9 +256,22 @@ async function batchPublish(articles) {
   return results;
 }
 
+/**
+ * 列出公众号
+ */
+async function listAccounts() {
+  checkConfig();
+  return [{
+    name: '配置的公众号',
+    wechatAppid: WECHAT_APPID,
+    appId: WECHAT_APPID
+  }];
+}
+
 module.exports = {
   listAccounts,
   publishArticle,
-  publishWithLocalScript,
-  batchPublish
+  batchPublish,
+  getAccessToken,
+  uploadPermanentMaterial
 };

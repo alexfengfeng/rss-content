@@ -11,6 +11,40 @@ const parser = new Parser({
 
 const RSSHUB_BASE = process.env.RSSHUB_URL || 'http://localhost:1200';
 
+function isAbsoluteUrl(value) {
+  return /^https?:\/\//i.test((value || '').trim());
+}
+
+function appendQueryParam(url, key, value) {
+  if (!value) return url;
+
+  const parsedUrl = new URL(url);
+  if (!parsedUrl.searchParams.has(key)) {
+    parsedUrl.searchParams.set(key, value);
+  }
+  return parsedUrl.toString();
+}
+
+function buildSourceUrl(source) {
+  const route = (source.route || '').trim();
+
+  if (source.type !== 'rsshub') {
+    return route;
+  }
+
+  let normalizedPath = route;
+  if (isAbsoluteUrl(route)) {
+    const parsedRoute = new URL(route);
+    normalizedPath = `${parsedRoute.pathname}${parsedRoute.search}`;
+  }
+
+  normalizedPath = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+  const baseUrl = RSSHUB_BASE.endsWith('/') ? RSSHUB_BASE : `${RSSHUB_BASE}/`;
+  const rsshubUrl = new URL(normalizedPath, baseUrl).toString();
+
+  return appendQueryParam(rsshubUrl, 'limit', process.env.FETCH_LIMIT);
+}
+
 // HTML 标签清理
 function stripHtml(html) {
   if (!html) return '';
@@ -42,13 +76,7 @@ function passesKeywords(text, keywords) {
 
 // 从 RSS 源获取数据
 async function fetchSource(source) {
-  let url;
-  if (source.type === 'rsshub') {
-    const limitParam = process.env.FETCH_LIMIT ? `?limit=${process.env.FETCH_LIMIT}` : '';
-    url = `${RSSHUB_BASE}${source.route}${limitParam}`;
-  } else {
-    url = source.route;
-  }
+  const url = buildSourceUrl(source);
 
   logger.info(`正在抓取: ${source.name} (${url})`);
 
