@@ -63,11 +63,7 @@
                   <strong><%= source.name %></strong>
                 </td>
                 <td>
-                  <% if (source.type === 'github' && /gitee\.com/i.test(source.route || '')) { %>
-                    <span class="badge bg-danger text-white">
-                      Gitee
-                    </span>
-                  <% } else if (source.type === 'github') { %>
+                  <% if (source.type === 'github') { %>
                     <span class="badge bg-dark text-white">
                       <i class="bi bi-github me-1"></i>GitHub
                     </span>

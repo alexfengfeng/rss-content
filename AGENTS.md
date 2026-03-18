@@ -13,7 +13,7 @@ RSS/GitHub Sources → Fetch → AI Rewrite → Publish to WeChat Drafts
 
 ### Key Capabilities
 - **RSS News Fetching**: Supports standard RSS feeds and RSSHub routes
-- **GitHub Trending**: Scrapes GitHub/Gitee trending repositories with detailed metadata
+- **GitHub Trending**: Scrapes GitHub trending repositories with detailed metadata
 - **AI Rewriting**: Uses LLM APIs (DeepSeek, OpenAI-compatible) to rewrite content for WeChat
 - **WeChat Publishing**: Publishes to WeChat Official Account drafts via official API
 - **Web Admin UI**: Express-based management interface with EJS templates
@@ -46,7 +46,7 @@ news-to-wechat/
 │   │   └── database.js             # SQLite operations, schema, templates
 │   ├── services/
 │   │   ├── rssService.js           # RSS/RSSHub fetching logic
-│   │   ├── githubTrendingService.js # GitHub/Gitee scraping & project rewrite
+│   │   ├── githubTrendingService.js # GitHub scraping & project rewrite
 │   │   ├── llmService.js           # LLM API integration for rewriting
 │   │   ├── wechatService.js        # WeChat API (drafts, media upload)
 │   │   └── jobService.js           # Job orchestration (fetch/rewrite/publish)
@@ -240,7 +240,7 @@ npm run web
 - HTML stripping for clean description
 
 ### GitHub Trending (`githubTrendingService.js`)
-- Scrapes GitHub/Gitee trending pages
+- Scrapes GitHub trending pages
 - Enriches with GitHub API data (README, repo metadata)
 - Generates structured project outlines via LLM
 - Renders styled HTML for WeChat

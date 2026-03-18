@@ -82,7 +82,7 @@ async function rewriteNewsBySource(news, options = {}) {
   const nextOptions = { ...options };
   if (
     !nextOptions.templateId &&
-    /(github\.com|gitee\.com)/i.test(news.link || '')
+    /github\.com/i.test(news.link || '')
   ) {
     const template = await db.getRewriteTemplateByName('开源项目改写模板');
     if (template?.id) {
