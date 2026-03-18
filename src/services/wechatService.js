@@ -2,6 +2,7 @@ const axios = require('axios');
 const logger = require('../utils/logger');
 const fs = require('fs');
 const path = require('path');
+const { processCoverImage } = require('../utils/coverGenerator');
 
 // 微信官方 API 配置
 const WECHAT_APPID = process.env.WECHAT_APPID;
@@ -141,20 +142,13 @@ async function publishArticle({
     let thumbMediaId = '';
     
     try {
-      if (coverImage) {
-        thumbMediaId = await uploadPermanentMaterial(coverImage, 'image');
-      } else {
-        // 使用缓存的默认封面 media_id（使用 640x400 的渐变色图片，微信要求封面至少 360x200）
-        if (!defaultCoverMediaId) {
-          // 使用一个外部的科技蓝渐变占位图
-          const defaultCover = 'https://picsum.photos/640/400';
-          defaultCoverMediaId = await uploadPermanentMaterial(defaultCover, 'image');
-          logger.info('默认封面已缓存，media_id:', defaultCoverMediaId);
-        }
-        thumbMediaId = defaultCoverMediaId;
-      }
+      // 1. 处理封面图片：检测格式，WebP 转 JPG，无封面则生成标题封面
+      const processedCover = await processCoverImage(coverImage, title, 'GitHub 热门项目');
+      
+      // 2. 上传处理后的封面
+      thumbMediaId = await uploadPermanentMaterial(processedCover, 'image');
     } catch (error) {
-      logger.error('封面图片上传失败:', error.message);
+      logger.error('封面图片处理或上传失败:', error.message);
       throw new Error(`封面上传失败：${error.message}`);
     }
 

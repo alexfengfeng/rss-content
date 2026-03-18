@@ -5,53 +5,108 @@ const path = require('path');
 const methodOverride = require('method-override');
 const expressLayouts = require('express-ejs-layouts');
 const db = require('../db/database');
-const { fetchAllSources, fetchAndUpdateSource } = require('../services/rssService');
+const { fetchAndUpdateSource } = require('../services/rssService');
+const { fetchAndUpdateGithub, rewriteGithubProject } = require('../services/githubTrendingService');
 const { rewriteNews } = require('../services/llmService');
-const { publishArticle } = require('../services/wechatService');
+const { runFetchJob, runRewriteJob, publishSingleNews, resetFailedNews } = require('../services/jobService');
+const { isHtmlContent } = require('../utils/articleFormatter');
 const logger = require('../utils/logger');
 
 const app = express();
 const PORT = process.env.WEB_PORT || 3000;
 
-// 中间件
+function parseDelimitedField(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || '').trim()).filter(Boolean);
+  }
+
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeSourcePayload(body) {
+  let config = body.config || {};
+
+  if (typeof config === 'string') {
+    const raw = config.trim();
+    config = raw ? JSON.parse(raw) : {};
+  }
+
+  return {
+    name: body.name,
+    type: body.type,
+    route: body.route,
+    enabled: body.enabled === 'on' || body.enabled === true,
+    keywords: parseDelimitedField(body.keywords),
+    blacklist: parseDelimitedField(body.blacklist),
+    config
+  };
+}
+
+function parseJobRun(jobRun) {
+  if (!jobRun) return null;
+
+  let details = null;
+  if (jobRun.details) {
+    try {
+      details = typeof jobRun.details === 'string' ? JSON.parse(jobRun.details) : jobRun.details;
+    } catch (error) {
+      details = { raw: jobRun.details };
+    }
+  }
+
+  return {
+    ...jobRun,
+    details
+  };
+}
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(methodOverride('_method'));
 
-// 静态文件服务 - 确保路径正确
 const publicPath = path.join(__dirname, 'public');
 console.log('Static files path:', publicPath);
 app.use('/css', express.static(path.join(publicPath, 'css')));
 app.use('/js', express.static(path.join(publicPath, 'js')));
 app.use(express.static(publicPath));
 
-// 设置视图引擎
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// 全局变量
 app.locals.appName = 'News to WeChat';
 app.locals.version = '1.0.0';
+app.locals.isHtmlContent = isHtmlContent;
 
-// 使用 EJS 布局
 app.use(expressLayouts);
 app.set('layout', 'layout');
 
-// ============== 页面路由 ==============
+async function rewriteNewsBySource(news) {
+  if (news.source_type === 'github') {
+    return rewriteGithubProject(news);
+  }
 
-// 仪表盘
+  return rewriteNews(news.title, news.description, news.link);
+}
+
 app.get('/', async (req, res) => {
   try {
-    const stats = await db.getStats();
-    const recentNews = await db.getPendingNews(5);
-    const rewrittenNews = await db.getRewrittenNews(5);
-    const sources = await db.getAllSources();
-    
+    const [stats, recentNews, rewrittenNews, sources, recentJobRuns] = await Promise.all([
+      db.getStats(),
+      db.getPendingNews(5),
+      db.getRewrittenNews(5),
+      db.getAllSources(),
+      db.getRecentJobRuns(6)
+    ]);
+
     res.render('dashboard', {
       stats,
       recentNews,
       rewrittenNews,
       sources,
+      recentJobRuns,
       activeTab: 'dashboard'
     });
   } catch (error) {
@@ -60,29 +115,25 @@ app.get('/', async (req, res) => {
   }
 });
 
-// 新闻列表页
 app.get('/news', async (req, res) => {
   try {
     const status = req.query.status || 'pending';
-    const page = parseInt(req.query.page) || 1;
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const sourceId = req.query.source || '';
     const search = req.query.search || '';
     const limit = 20;
-    
-    // 获取筛选后的新闻
-    const news = await db.getNewsByFilter(status, { sourceId, search });
-    
-    // 分页
-    const total = news.length;
-    const totalPages = Math.ceil(total / limit);
     const offset = (page - 1) * limit;
-    const paginatedNews = news.slice(offset, offset + limit);
-    
-    // 获取所有信源用于筛选下拉框
-    const sources = await db.getAllSources();
-    
+
+    const [news, total, sources] = await Promise.all([
+      db.getNewsByFilter(status, { sourceId, search, limit, offset }),
+      db.countNewsByFilter(status, { sourceId, search }),
+      db.getAllSources()
+    ]);
+
+    const totalPages = Math.max(Math.ceil(total / limit), 1);
+
     res.render('news', {
-      news: paginatedNews,
+      news,
       status,
       page,
       totalPages,
@@ -98,59 +149,34 @@ app.get('/news', async (req, res) => {
   }
 });
 
-// 新闻详情页
 app.get('/news/:id', async (req, res) => {
   try {
-    const sqlite3 = require('sqlite3').verbose();
-    const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../../data/news.db');
-    const db2 = new sqlite3.Database(DB_PATH);
-    
-    db2.get(
-      'SELECT n.*, s.name as source_name FROM news n JOIN sources s ON n.source_id = s.id WHERE n.id = ?',
-      [req.params.id],
-      (err, row) => {
-        db2.close();
-        if (err) {
-          res.status(500).render('error', { error: err.message });
-        } else if (!row) {
-          res.status(404).render('error', { error: '新闻不存在' });
-        } else {
-          res.render('news-detail', { news: row, activeTab: 'news' });
-        }
-      }
-    );
+    const news = await db.getNewsById(req.params.id);
+
+    if (!news) {
+      return res.status(404).render('error', { error: '新闻不存在' });
+    }
+
+    res.render('news-detail', { news, activeTab: 'news' });
   } catch (error) {
     res.status(500).render('error', { error: error.message });
   }
 });
 
-// 新闻编辑页
 app.get('/news/:id/edit', async (req, res) => {
   try {
-    const sqlite3 = require('sqlite3').verbose();
-    const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../../data/news.db');
-    const db2 = new sqlite3.Database(DB_PATH);
-    
-    db2.get(
-      'SELECT n.*, s.name as source_name FROM news n JOIN sources s ON n.source_id = s.id WHERE n.id = ?',
-      [req.params.id],
-      (err, row) => {
-        db2.close();
-        if (err) {
-          res.status(500).render('error', { error: err.message });
-        } else if (!row) {
-          res.status(404).render('error', { error: '新闻不存在' });
-        } else {
-          res.render('news-edit', { news: row, activeTab: 'news' });
-        }
-      }
-    );
+    const news = await db.getNewsById(req.params.id);
+
+    if (!news) {
+      return res.status(404).render('error', { error: '新闻不存在' });
+    }
+
+    res.render('news-edit', { news, activeTab: 'news' });
   } catch (error) {
     res.status(500).render('error', { error: error.message });
   }
 });
 
-// 信源管理页
 app.get('/sources', async (req, res) => {
   try {
     const sources = await db.getAllSources();
@@ -161,34 +187,24 @@ app.get('/sources', async (req, res) => {
   }
 });
 
-// 添加信源页
 app.get('/sources/new', (req, res) => {
   res.render('source-form', { source: null, activeTab: 'sources' });
 });
 
-// 编辑信源页
 app.get('/sources/:id/edit', async (req, res) => {
   try {
-    const sqlite3 = require('sqlite3').verbose();
-    const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../../data/news.db');
-    const db2 = new sqlite3.Database(DB_PATH);
-    
-    db2.get('SELECT * FROM sources WHERE id = ?', [req.params.id], (err, row) => {
-      db2.close();
-      if (err) {
-        res.status(500).render('error', { error: err.message });
-      } else if (!row) {
-        res.status(404).render('error', { error: '信源不存在' });
-      } else {
-        res.render('source-form', { source: row, activeTab: 'sources' });
-      }
-    });
+    const source = await db.getSourceById(req.params.id);
+
+    if (!source) {
+      return res.status(404).render('error', { error: '信源不存在' });
+    }
+
+    res.render('source-form', { source, activeTab: 'sources' });
   } catch (error) {
     res.status(500).render('error', { error: error.message });
   }
 });
 
-// 系统配置页
 app.get('/settings', (req, res) => {
   const settings = {
     llmApiKey: process.env.LLM_API_KEY ? '***' + process.env.LLM_API_KEY.slice(-4) : '',
@@ -203,9 +219,42 @@ app.get('/settings', (req, res) => {
   res.render('settings', { settings, activeTab: 'settings' });
 });
 
-// ============== API 路由 ==============
+app.get('/jobs', async (req, res) => {
+  try {
+    const [jobRuns, jobStats] = await Promise.all([
+      db.getRecentJobRuns(50),
+      db.getJobRunStats(50)
+    ]);
 
-// 获取统计信息
+    res.render('jobs', {
+      jobRuns: jobRuns.map(parseJobRun),
+      jobStats,
+      activeTab: 'jobs'
+    });
+  } catch (error) {
+    logger.error('任务日志加载失败:', error.message);
+    res.status(500).render('error', { error: error.message });
+  }
+});
+
+app.get('/jobs/:id', async (req, res) => {
+  try {
+    const jobRun = parseJobRun(await db.getJobRunById(req.params.id));
+
+    if (!jobRun) {
+      return res.status(404).render('error', { error: '任务日志不存在' });
+    }
+
+    res.render('job-detail', {
+      jobRun,
+      activeTab: 'jobs'
+    });
+  } catch (error) {
+    logger.error('任务日志详情加载失败:', error.message);
+    res.status(500).render('error', { error: error.message });
+  }
+});
+
 app.get('/api/stats', async (req, res) => {
   try {
     const stats = await db.getStats();
@@ -215,286 +264,175 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
-// 手动触发抓取
 app.post('/api/fetch', async (req, res) => {
   try {
     const { sourceId } = req.body;
     let result;
-    
+
     if (sourceId) {
-      const source = await new Promise((resolve, reject) => {
-        const sqlite3 = require('sqlite3').verbose();
-        const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../../data/news.db');
-        const db2 = new sqlite3.Database(DB_PATH);
-        db2.get('SELECT * FROM sources WHERE id = ?', [sourceId], (err, row) => {
-          db2.close();
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
-      
+      const source = await db.getSourceById(sourceId);
+
       if (!source) {
         return res.status(404).json({ success: false, error: '信源不存在' });
       }
-      result = await fetchAndUpdateSource(source);
+
+      result = source.type === 'github'
+        ? await fetchAndUpdateGithub(source)
+        : await fetchAndUpdateSource(source);
     } else {
-      result = await fetchAllSources();
+      result = await runFetchJob();
     }
-    
+
     res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// 手动触发改写
 app.post('/api/rewrite', async (req, res) => {
   try {
     const { newsId } = req.body;
-    
+
     if (newsId) {
-      // 改写单条
-      const sqlite3 = require('sqlite3').verbose();
-      const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../../data/news.db');
-      const db2 = new sqlite3.Database(DB_PATH);
-      
-      const news = await new Promise((resolve, reject) => {
-        db2.get('SELECT * FROM news WHERE id = ?', [newsId], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
-      
+      const news = await db.getNewsById(newsId);
+
       if (!news) {
-        db2.close();
         return res.status(404).json({ success: false, error: '新闻不存在' });
       }
-      
-      const result = await rewriteNews(news.title, news.description, news.link);
-      await db.updateRewrittenNews(news.id, result.title, result.content);
-      db2.close();
-      
-      res.json({ success: true, data: result });
-    } else {
-      // 批量改写前5条
-      const pendingNews = await db.getPendingNews(5);
-      const results = [];
-      
-      for (const news of pendingNews) {
-        try {
-          const result = await rewriteNews(news.title, news.description, news.link);
-          await db.updateRewrittenNews(news.id, result.title, result.content);
-          results.push({ id: news.id, success: true, title: result.title });
-          await new Promise(r => setTimeout(r, 1000));
-        } catch (err) {
-          results.push({ id: news.id, success: false, error: err.message });
-        }
-      }
-      
-      res.json({ success: true, data: results });
+
+      const result = await rewriteNewsBySource(news);
+      await db.updateRewrittenNews(news.id, result.title, result.content, {
+        imageUrl: result.imageUrl,
+        projectMeta: result.projectMeta
+      });
+
+      return res.json({ success: true, data: result });
     }
+
+    const result = await runRewriteJob({ limit: 5 });
+    res.json({ success: true, data: result.results });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// 发布到公众号
 app.post('/api/publish', async (req, res) => {
   try {
     const { newsId } = req.body;
-    
-    const sqlite3 = require('sqlite3').verbose();
-    const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../../data/news.db');
-    const db2 = new sqlite3.Database(DB_PATH);
-    
-    const news = await new Promise((resolve, reject) => {
-      db2.get('SELECT n.*, s.name as source_name FROM news n JOIN sources s ON n.source_id = s.id WHERE n.id = ?', [newsId], (err, row) => {
-        db2.close();
-        if (err) reject(err);
-        else resolve(row);
-      });
-    });
-    
+    const news = await db.getNewsById(newsId);
+
     if (!news) {
       return res.status(404).json({ success: false, error: '新闻不存在' });
     }
-    
-    const title = news.rewritten_title || news.title;
-    const content = news.rewritten_content || news.description;
-    const fullContent = `${content}\n\n---\n\n*原文链接: [点击查看](${news.link})*\n\n*文章来源: ${news.source_name}*`;
-    
-    const result = await publishArticle({
-      title,
-      content: fullContent,
-      summary: content.substring(0, 120)
-    });
-    
-    await db.updatePublishedStatus(news.id, result.mediaId);
-    
+
+    const result = await publishSingleNews(news);
     res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// 更新新闻
-app.put('/api/news/:id', async (req, res) => {
+app.post('/api/news/:id/reset', async (req, res) => {
   try {
-    const { title, description, rewritten_title, rewritten_content } = req.body;
-    const sqlite3 = require('sqlite3').verbose();
-    const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../../data/news.db');
-    const db2 = new sqlite3.Database(DB_PATH);
-    
-    const updates = [];
-    const params = [];
-    
-    if (title !== undefined) {
-      updates.push('title = ?');
-      params.push(title);
+    const news = await db.getNewsById(req.params.id);
+
+    if (!news) {
+      return res.status(404).json({ success: false, error: '新闻不存在' });
     }
-    if (description !== undefined) {
-      updates.push('description = ?');
-      params.push(description);
-    }
-    if (rewritten_title !== undefined) {
-      updates.push('rewritten_title = ?');
-      params.push(rewritten_title);
-    }
-    if (rewritten_content !== undefined) {
-      updates.push('rewritten_content = ?');
-      params.push(rewritten_content);
-    }
-    
-    if (updates.length === 0) {
-      return res.status(400).json({ success: false, error: '没有要更新的字段' });
-    }
-    
-    params.push(req.params.id);
-    
-    db2.run(
-      `UPDATE news SET ${updates.join(', ')} WHERE id = ?`,
-      params,
-      function(err) {
-        db2.close();
-        if (err) {
-          res.status(500).json({ success: false, error: err.message });
-        } else if (this.changes === 0) {
-          res.status(404).json({ success: false, error: '新闻不存在' });
-        } else {
-          res.json({ success: true, data: { changes: this.changes } });
-        }
-      }
-    );
+
+    const result = await db.resetNewsStatus(req.params.id, 'pending');
+    res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// 添加信源
+app.post('/api/news/reset-failed', async (req, res) => {
+  try {
+    const limit = Math.max(parseInt(req.body.limit, 10) || 20, 1);
+    const result = await resetFailedNews(limit);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.put('/api/news/:id', async (req, res) => {
+  try {
+    const { title, description, rewritten_title, rewritten_content } = req.body;
+
+    if (
+      title === undefined &&
+      description === undefined &&
+      rewritten_title === undefined &&
+      rewritten_content === undefined
+    ) {
+      return res.status(400).json({ success: false, error: '没有要更新的字段' });
+    }
+
+    const result = await db.updateNewsFields(req.params.id, {
+      title,
+      description,
+      rewritten_title,
+      rewritten_content
+    });
+
+    if (result.changes === 0) {
+      return res.status(404).json({ success: false, error: '新闻不存在' });
+    }
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.post('/api/sources', async (req, res) => {
   try {
-    const { name, type, route, enabled, keywords, blacklist } = req.body;
-    
-    const result = await db.addSource({
-      name,
-      type,
-      route,
-      enabled: enabled === 'on' || enabled === true,
-      keywords: keywords ? keywords.split(',').map(k => k.trim()) : [],
-      blacklist: blacklist ? blacklist.split(',').map(k => k.trim()) : []
-    });
-    
+    const result = await db.addSource(normalizeSourcePayload(req.body));
     res.json({ success: true, data: { id: result.id } });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// 更新信源
 app.put('/api/sources/:id', async (req, res) => {
   try {
-    const { name, type, route, enabled, keywords, blacklist } = req.body;
-    const sqlite3 = require('sqlite3').verbose();
-    const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../../data/news.db');
-    const db2 = new sqlite3.Database(DB_PATH);
-    
-    db2.run(
-      `UPDATE sources SET name = ?, type = ?, route = ?, enabled = ?, keywords = ?, blacklist = ?, updated_at = datetime('now') WHERE id = ?`,
-      [
-        name,
-        type,
-        route,
-        enabled === 'on' || enabled === true ? 1 : 0,
-        JSON.stringify(keywords ? keywords.split(',').map(k => k.trim()) : []),
-        JSON.stringify(blacklist ? blacklist.split(',').map(k => k.trim()) : []),
-        req.params.id
-      ],
-      function(err) {
-        db2.close();
-        if (err) {
-          res.status(500).json({ success: false, error: err.message });
-        } else {
-          res.json({ success: true, data: { changes: this.changes } });
-        }
-      }
-    );
+    const result = await db.updateSource(req.params.id, normalizeSourcePayload(req.body));
+    res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// 删除信源
 app.delete('/api/sources/:id', async (req, res) => {
   try {
-    const sqlite3 = require('sqlite3').verbose();
-    const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../../data/news.db');
-    const db2 = new sqlite3.Database(DB_PATH);
-    
-    db2.run('DELETE FROM sources WHERE id = ?', [req.params.id], function(err) {
-      db2.close();
-      if (err) {
-        res.status(500).json({ success: false, error: err.message });
-      } else {
-        res.json({ success: true, data: { changes: this.changes } });
-      }
-    });
+    const result = await db.deleteSource(req.params.id);
+    res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// 删除新闻
 app.delete('/api/news/:id', async (req, res) => {
   try {
-    const sqlite3 = require('sqlite3').verbose();
-    const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../../data/news.db');
-    const db2 = new sqlite3.Database(DB_PATH);
-    
-    db2.run('DELETE FROM news WHERE id = ?', [req.params.id], function(err) {
-      db2.close();
-      if (err) {
-        res.status(500).json({ success: false, error: err.message });
-      } else {
-        res.json({ success: true, data: { changes: this.changes } });
-      }
-    });
+    const result = await db.deleteNews(req.params.id);
+    res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// 启动服务器
 function startWebServer() {
   app.listen(PORT, () => {
     logger.info('');
-    logger.info('🌐 Web 管理界面已启动');
+    logger.info('Web 管理界面已启动');
     logger.info(`   本地访问: http://localhost:${PORT}`);
     logger.info(`   网络访问: http://0.0.0.0:${PORT}`);
     logger.info('');
   });
 }
 
-// 如果直接运行此文件
 if (require.main === module) {
   startWebServer();
 }

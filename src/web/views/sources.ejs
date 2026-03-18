@@ -63,9 +63,19 @@
                   <strong><%= source.name %></strong>
                 </td>
                 <td>
-                  <span class="badge bg-light text-dark">
-                    <%= source.type === 'rsshub' ? 'RSSHub' : '标准 RSS' %>
-                  </span>
+                  <% if (source.type === 'github') { %>
+                    <span class="badge bg-dark text-white">
+                      <i class="bi bi-github me-1"></i>GitHub
+                    </span>
+                  <% } else if (source.type === 'rsshub') { %>
+                    <span class="badge bg-light text-dark">
+                      RSSHub
+                    </span>
+                  <% } else { %>
+                    <span class="badge bg-light text-dark">
+                      标准 RSS
+                    </span>
+                  <% } %>
                 </td>
                 <td>
                   <code class="text-break" style="font-size: 0.75rem;"><%= source.route %></code>
@@ -119,6 +129,7 @@
         <ul class="list-unstyled text-muted">
           <li><strong>标准 RSS</strong>：直接访问 RSS 地址，如 https://example.com/feed.xml</li>
           <li><strong>RSSHub</strong>：通过 RSSHub 路由，如 /36kr/newsflashes</li>
+          <li><strong>GitHub Trending</strong>：抓取 GitHub 每日/每周/每月热门项目</li>
         </ul>
       </div>
       <div class="col-md-6">

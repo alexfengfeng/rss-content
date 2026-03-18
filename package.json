@@ -7,12 +7,17 @@
     "start": "node src/index.js",
     "web": "node src/web/index.js",
     "fetch": "node src/scripts/fetchNews.js",
+    "fetch:github": "node src/scripts/fetchGithubTrending.js",
     "rewrite": "node src/scripts/rewriteNews.js",
+    "rewrite:github": "node src/scripts/rewriteGithubProjects.js",
     "publish": "node src/scripts/publishToWechat.js",
+    "retry:failed": "node src/scripts/retryFailedNews.js",
     "publish:sub": "node publish-subscription.js",
     "dev": "node src/scripts/devMode.js",
     "init": "node src/scripts/initSources.js",
-    "view": "node src/scripts/viewNews.js"
+    "view": "node src/scripts/viewNews.js",
+    "migrate": "node src/scripts/migrate.js",
+    "test:github": "node src/scripts/testGithubTrending.js"
   },
   "keywords": [
     "news",
@@ -24,6 +29,7 @@
   "license": "MIT",
   "dependencies": {
     "axios": "^1.6.0",
+    "canvas": "^3.2.1",
     "dotenv": "^16.3.0",
     "ejs": "^5.0.1",
     "express": "^5.2.1",

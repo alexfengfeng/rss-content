@@ -140,6 +140,12 @@ async function processAndSaveItems(source, items) {
 
 // 抓取单个源
 async function fetchAndUpdateSource(source) {
+  // 跳过非 RSS 类型的源（如 github）
+  if (source.type === 'github') {
+    logger.debug(`[RSS 服务] 跳过 GitHub 类型源：${source.name}`);
+    return { source: source.name, skipped: true, reason: 'github type' };
+  }
+  
   try {
     const items = await fetchSource(source);
     return await processAndSaveItems(source, items);
@@ -151,14 +157,22 @@ async function fetchAndUpdateSource(source) {
 // 抓取所有源
 async function fetchAllSources() {
   const sources = await db.getEnabledSources();
-  logger.info(`开始抓取 ${sources.length} 个新闻源...`);
+  // 过滤掉 github 类型的源
+  const rssSources = sources.filter(s => s.type !== 'github');
+  
+  if (rssSources.length === 0) {
+    logger.info('未找到启用的 RSS 源');
+    return { total: 0, success: 0, failed: 0, details: [] };
+  }
+  
+  logger.info(`开始抓取 ${rssSources.length} 个 RSS 新闻源...`);
 
   const results = await Promise.allSettled(
-    sources.map((s) => fetchAndUpdateSource(s))
+    rssSources.map((s) => fetchAndUpdateSource(s))
   );
 
   const summary = {
-    total: sources.length,
+    total: rssSources.length,
     success: 0,
     failed: 0,
     details: []
@@ -166,11 +180,16 @@ async function fetchAllSources() {
 
   results.forEach((r, i) => {
     if (r.status === 'fulfilled') {
-      summary.success++;
-      summary.details.push(r.value);
+      if (r.value.skipped) {
+        // 跳过的源不计入成功/失败
+        summary.details.push(r.value);
+      } else {
+        summary.success++;
+        summary.details.push(r.value);
+      }
     } else {
       summary.failed++;
-      summary.details.push({ source: sources[i].name, error: r.reason?.message });
+      summary.details.push({ source: rssSources[i].name, error: r.reason?.message });
     }
   });
 

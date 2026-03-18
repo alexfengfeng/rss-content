@@ -7,6 +7,7 @@
 ## 功能特性
 
 - 📰 **RSS 新闻抓取** - 支持 RSSHub 和标准 RSS 源
+- 🐙 **GitHub Trending** - 自动抓取 GitHub 每日/每周热门项目
 - 🤖 **AI 智能改写** - 使用大模型改写新闻内容
 - 📱 **公众号自动发布** - 一键发布到微信公众号草稿箱
 - ⏰ **定时任务** - 支持自动抓取和定时发布
@@ -87,6 +88,11 @@ npm start
 #### 抓取新闻
 ```bash
 npm run fetch
+```
+
+#### 抓取 GitHub Trending
+```bash
+npm run fetch:github
 ```
 
 #### AI 改写
@@ -203,6 +209,71 @@ npm run view sources
 npm run init
 ```
 
+### GitHub Trending 配置
+
+GitHub Trending 源支持额外的配置选项：
+
+```json
+{
+  "name": "GitHub Trending Daily",
+  "type": "github",
+  "route": "https://github.com/trending",
+  "enabled": true,
+  "since": "daily",
+  "language": "",
+  "spokenLanguage": "zh",
+  "keywords": [],
+  "blacklist": []
+}
+```
+
+**GitHub 源特有字段：**
+- `since` - 时间范围：`daily`（每日）、`weekly`（每周）、`monthly`（每月）
+- `language` - 编程语言筛选（如 `Python`、`JavaScript`，留空表示全部）
+- `spokenLanguage` - 用户语言筛选（如 `zh` 表示中文用户）
+
+**抓取的数据字段：**
+- 项目名、作者
+- 项目描述
+- Star 数、Fork 数
+- 编程语言
+- 今日新增 Star 数
+
+**示例配置：**
+
+```json
+[
+  {
+    "name": "GitHub Trending Daily",
+    "type": "github",
+    "route": "https://github.com/trending",
+    "enabled": true,
+    "since": "daily",
+    "spokenLanguage": "zh"
+  },
+  {
+    "name": "GitHub Trending Python",
+    "type": "github",
+    "route": "https://github.com/trending",
+    "enabled": false,
+    "since": "daily",
+    "language": "Python"
+  },
+  {
+    "name": "GitHub Trending Weekly",
+    "type": "github",
+    "route": "https://github.com/trending",
+    "enabled": false,
+    "since": "weekly"
+  }
+]
+```
+
+单独执行 GitHub Trending 抓取：
+```bash
+npm run fetch:github
+```
+
 ## 常用 RSS 源推荐
 
 ```json
@@ -273,15 +344,18 @@ news-to-wechat/
 │   │   └── database.js          # SQLite 数据库操作
 │   ├── services/
 │   │   ├── rssService.js        # RSS 抓取服务
+│   │   ├── githubTrendingService.js  # GitHub Trending 抓取服务
 │   │   ├── llmService.js        # AI 改写服务
 │   │   └── wechatService.js     # 公众号发布服务
 │   ├── scripts/
 │   │   ├── fetchNews.js         # 抓取脚本
+│   │   ├── fetchGithubTrending.js  # GitHub Trending 抓取脚本
 │   │   ├── rewriteNews.js       # 改写脚本
 │   │   ├── publishToWechat.js   # 发布脚本
 │   │   ├── initSources.js       # 初始化新闻源
 │   │   ├── viewNews.js          # 查看新闻脚本
-│   │   └── devMode.js           # 交互式开发模式
+│   │   ├── devMode.js           # 交互式开发模式
+│   │   └── migrate.js           # 数据库迁移脚本
 │   ├── web/                     # Web 管理界面
 │   │   ├── server.js            # Express 服务器
 │   │   ├── index.js             # Web 启动入口

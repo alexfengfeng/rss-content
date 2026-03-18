@@ -1,6 +1,6 @@
 [
   {
-    "name": "BBC中文",
+    "name": "BBC 中文",
     "type": "rss",
     "route": "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml",
     "enabled": true,
@@ -12,7 +12,6 @@
     "type": "rss",
     "route": "https://www.solidot.org/index.rss",
     "enabled": true,
-    "keywords": [],
     "blacklist": ["广告"]
   },
   {
@@ -24,7 +23,7 @@
     "blacklist": []
   },
   {
-    "name": "36氪快讯",
+    "name": "36 氪快讯",
     "type": "rsshub",
     "route": "/36kr/newsflashes",
     "enabled": false,
@@ -36,6 +35,28 @@
     "type": "rsshub",
     "route": "/hackernews",
     "enabled": false,
+    "keywords": [],
+    "blacklist": []
+  },
+  {
+    "name": "GitHub Trending Daily",
+    "type": "github",
+    "route": "https://github.com/trending",
+    "enabled": true,
+    "since": "daily",
+    "language": "",
+    "spokenLanguage": "zh",
+    "keywords": [],
+    "blacklist": []
+  },
+  {
+    "name": "GitHub Trending Weekly",
+    "type": "github",
+    "route": "https://github.com/trending",
+    "enabled": false,
+    "since": "weekly",
+    "language": "",
+    "spokenLanguage": "",
     "keywords": [],
     "blacklist": []
   }

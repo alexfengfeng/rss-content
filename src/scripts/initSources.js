@@ -48,7 +48,12 @@ async function main() {
         route: source.route,
         enabled: source.enabled !== false,
         keywords: source.keywords || [],
-        blacklist: source.blacklist || []
+        blacklist: source.blacklist || [],
+        config: {
+          since: source.since,
+          language: source.language,
+          spokenLanguage: source.spokenLanguage
+        }
       });
       
       logger.info(`添加新闻源: ${source.name}`);

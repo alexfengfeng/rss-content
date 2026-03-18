@@ -1,0 +1,140 @@
+<div class="mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/">首页</a></li>
+      <li class="breadcrumb-item"><a href="/jobs">任务日志</a></li>
+      <li class="breadcrumb-item active" aria-current="page">任务详情 #<%= jobRun.id %></li>
+    </ol>
+  </nav>
+</div>
+
+<div class="content-card mb-4">
+  <div class="card-header">
+    <h5 class="card-title">
+      <i class="bi bi-list-check text-primary me-2"></i>任务概览
+    </h5>
+  </div>
+  <div class="card-body">
+    <div class="row g-4">
+      <div class="col-md-3">
+        <div class="stat-card">
+          <div class="stat-label">任务类型</div>
+          <div class="stat-value" style="font-size: 1.25rem;"><%= jobRun.job_type %></div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="stat-card">
+          <div class="stat-label">状态</div>
+          <div class="mt-3">
+            <span class="status-badge status-<%= jobRun.status === 'partial' ? 'rewritten' : jobRun.status === 'running' ? 'pending' : jobRun.status %>">
+              <%= jobRun.status %>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="stat-card">
+          <div class="stat-label">结果</div>
+          <div class="small mt-2">total <%= jobRun.total_count %></div>
+          <div class="small">success <%= jobRun.success_count %></div>
+          <div class="small">failed <%= jobRun.failed_count %></div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="stat-card">
+          <div class="stat-label">触发方式</div>
+          <div class="stat-value" style="font-size: 1.25rem;"><%= jobRun.trigger_type %></div>
+        </div>
+      </div>
+    </div>
+
+    <table class="table table-borderless mt-4">
+      <tr>
+        <td width="120" class="text-muted">范围</td>
+        <td><%= jobRun.scope || '-' %></td>
+      </tr>
+      <tr>
+        <td class="text-muted">开始时间</td>
+        <td><%= jobRun.started_at || '-' %></td>
+      </tr>
+      <tr>
+        <td class="text-muted">结束时间</td>
+        <td><%= jobRun.finished_at || '-' %></td>
+      </tr>
+      <tr>
+        <td class="text-muted">消息</td>
+        <td><%= jobRun.message || '-' %></td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<% const details = jobRun.details || {}; %>
+<% const itemResults = Array.isArray(details.results) ? details.results : []; %>
+
+<div class="content-card mb-4">
+  <div class="card-header">
+    <h5 class="card-title">
+      <i class="bi bi-file-earmark-code text-primary me-2"></i>任务明细
+    </h5>
+  </div>
+  <div class="card-body">
+    <% if (itemResults.length > 0) { %>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>状态</th>
+              <th>标题 / 媒体 ID</th>
+              <th>错误信息</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% itemResults.forEach((item) => { %>
+              <tr>
+                <td>
+                  <% if (item.id) { %>
+                    <a href="/news/<%= item.id %>">#<%= item.id %></a>
+                  <% } else { %>
+                    -
+                  <% } %>
+                </td>
+                <td>
+                  <span class="status-badge status-<%= item.success ? 'published' : 'failed' %>">
+                    <%= item.success ? 'success' : 'failed' %>
+                  </span>
+                </td>
+                <td>
+                  <%= item.title || item.mediaId || '-' %>
+                </td>
+                <td class="text-danger"><%= item.error || '-' %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %>
+      <div class="alert alert-light mb-0">
+        该任务没有逐条结果明细，下面展示原始 details JSON。
+      </div>
+    <% } %>
+  </div>
+</div>
+
+<div class="content-card">
+  <div class="card-header">
+    <h5 class="card-title">
+      <i class="bi bi-braces text-primary me-2"></i>原始 Details
+    </h5>
+  </div>
+  <div class="card-body">
+    <pre><code><%= JSON.stringify(details, null, 2) %></code></pre>
+  </div>
+</div>
+
+<div class="action-bar mt-4">
+  <a href="/jobs" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-2"></i>返回任务日志
+  </a>
+</div>

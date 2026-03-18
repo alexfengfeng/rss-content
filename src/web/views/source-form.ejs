@@ -55,7 +55,7 @@ try {
             
             <div class="mb-3">
               <label class="form-label">类型 <span class="text-danger">*</span></label>
-              <div class="d-flex gap-3">
+              <div class="d-flex gap-3 flex-wrap">
                 <div class="form-check">
                   <input class="form-check-input" type="radio" name="type" value="rss" id="typeRss" <%= sourceData.type === 'rss' ? 'checked' : '' %>>
                   <label class="form-check-label" for="typeRss">
@@ -70,10 +70,17 @@ try {
                     <div class="text-muted small">通过 RSSHub 路由</div>
                   </label>
                 </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="type" value="github" id="typeGithub" <%= sourceData.type === 'github' ? 'checked' : '' %>>
+                  <label class="form-check-label" for="typeGithub">
+                    <strong>GitHub Trending</strong>
+                    <div class="text-muted small">抓取 GitHub 热门项目</div>
+                  </label>
+                </div>
               </div>
             </div>
             
-            <div class="mb-3">
+            <div class="mb-3" id="routeField">
               <label class="form-label">
                 <span id="routeLabel"><%= sourceData.type === 'rsshub' ? 'RSSHub 路由' : 'RSS 地址' %></span>
                 <span class="text-danger">*</span>
@@ -84,6 +91,39 @@ try {
                 <%= sourceData.type === 'rsshub' 
                   ? 'RSSHub 路由或完整 URL，如：/36kr/newsflashes 或 https://rsshub.app/36kr/newsflashes' 
                   : '完整的 RSS 地址，如：https://www.solidot.org/index.rss' %>
+              </div>
+            </div>
+            
+            <!-- GitHub Trending 专属配置 -->
+            <div id="githubConfig" style="display: <%= sourceData.type === 'github' ? 'block' : 'none' %>;">
+              <div class="mb-3">
+                <label class="form-label">
+                  <i class="bi bi-calendar-event text-primary me-1"></i>时间范围
+                </label>
+                <select class="form-select" name="since" id="sinceSelect">
+                  <option value="daily" <%= (sourceData.config && sourceData.config.since === 'daily') || !sourceData.config ? 'selected' : '' %>>每日 (Daily)</option>
+                  <option value="weekly" <%= sourceData.config && sourceData.config.since === 'weekly' ? 'selected' : '' %>>每周 (Weekly)</option>
+                  <option value="monthly" <%= sourceData.config && sourceData.config.since === 'monthly' ? 'selected' : '' %>>每月 (Monthly)</option>
+                </select>
+                <div class="form-text">抓取哪个时间范围内的热门项目</div>
+              </div>
+              
+              <div class="mb-3">
+                <label class="form-label">
+                  <i class="bi bi-code-slash text-warning me-1"></i>编程语言
+                </label>
+                <input type="text" class="form-control" name="language" value="<%= sourceData.config && sourceData.config.language || '' %>" 
+                  placeholder="如：JavaScript, Python, Rust（留空表示全部语言）">
+                <div class="form-text">筛选特定编程语言的项目</div>
+              </div>
+              
+              <div class="mb-3">
+                <label class="form-label">
+                  <i class="bi bi-translate text-info me-1"></i>语言社区
+                </label>
+                <input type="text" class="form-control" name="spokenLanguage" value="<%= sourceData.config && sourceData.config.spokenLanguage || '' %>" 
+                  placeholder="如：zh, en, ja（留空表示全部）">
+                <div class="form-text">筛选特定语言社区（如 zh=中文，en=英文）</div>
               </div>
             </div>
             
@@ -161,11 +201,13 @@ try {
 </div>
 
 <script>
-// 类型切换时更新提示
+// 类型切换时更新提示和显示配置字段
 const typeRadios = document.querySelectorAll('input[name="type"]');
 const routeLabel = document.getElementById('routeLabel');
 const routeHelp = document.getElementById('routeHelp');
 const routeInput = document.querySelector('input[name="route"]');
+const routeField = document.getElementById('routeField');
+const githubConfig = document.getElementById('githubConfig');
 
 typeRadios.forEach(radio => {
   radio.addEventListener('change', function() {
@@ -173,10 +215,20 @@ typeRadios.forEach(radio => {
       routeLabel.textContent = 'RSSHub 路由';
       routeHelp.textContent = 'RSSHub 路由或完整 URL，如：/36kr/newsflashes 或 https://rsshub.app/36kr/newsflashes';
       routeInput.placeholder = '/36kr/newsflashes';
+      routeField.style.display = 'block';
+      githubConfig.style.display = 'none';
+    } else if (this.value === 'github') {
+      routeLabel.textContent = 'GitHub Trending 地址';
+      routeHelp.textContent = 'GitHub Trending 地址，默认：https://github.com/trending';
+      routeInput.placeholder = 'https://github.com/trending';
+      routeField.style.display = 'block';
+      githubConfig.style.display = 'block';
     } else {
       routeLabel.textContent = 'RSS 地址';
       routeHelp.textContent = '完整的 RSS 地址，如：https://www.solidot.org/index.rss';
       routeInput.placeholder = 'https://example.com/feed.xml';
+      routeField.style.display = 'block';
+      githubConfig.style.display = 'none';
     }
   });
 });
@@ -191,6 +243,21 @@ async function saveSource(event) {
   
   // 处理 enabled 复选框
   data.enabled = form.querySelector('input[name="enabled"]').checked;
+  
+  // 处理 GitHub 专属配置
+  if (data.type === 'github') {
+    data.config = {
+      since: data.since || 'daily',
+      language: data.language || '',
+      spokenLanguage: data.spokenLanguage || ''
+    };
+    // 删除单独的字段，避免污染
+    delete data.since;
+    delete data.language;
+    delete data.spokenLanguage;
+  } else {
+    data.config = {};
+  }
   
   const isEditForm = !!data.id;
   const url = isEditForm ? '/api/sources/' + data.id : '/api/sources';

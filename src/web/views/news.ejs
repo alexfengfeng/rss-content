@@ -1,71 +1,68 @@
-
-
 <div class="mb-4">
   <h1 class="h3 mb-2">新闻管理</h1>
-  <p class="text-muted">管理抓取到的新闻，进行改写和发布</p>
+  <p class="text-muted">管理抓取到的新闻，执行改写、发布和失败重试。</p>
 </div>
 
-<!-- 操作栏 -->
 <div class="action-bar">
   <div class="d-flex align-items-center gap-2">
-    <!-- 状态切换 -->
     <div class="btn-group btn-group-sm">
-      <a href="/news?status=pending<%= sourceId ? '&source='+sourceId : '' %><%= search ? '&search='+encodeURIComponent(search) : '' %>" 
+      <a href="/news?status=pending<%= sourceId ? '&source=' + sourceId : '' %><%= search ? '&search=' + encodeURIComponent(search) : '' %>"
          class="btn <%= status === 'pending' ? 'btn-primary' : 'btn-outline-primary' %>">待改写</a>
-      <a href="/news?status=rewritten<%= sourceId ? '&source='+sourceId : '' %><%= search ? '&search='+encodeURIComponent(search) : '' %>" 
-         class="btn <%= status === 'rewritten' ? 'btn-info text-white' : 'btn-outline-info' %>">已改写</a>
-      <a href="/news?status=published<%= sourceId ? '&source='+sourceId : '' %><%= search ? '&search='+encodeURIComponent(search) : '' %>" 
-         class="btn <%= status === 'published' ? 'btn-success' : 'btn-outline-success' %>">已发布</a>
+      <a href="/news?status=rewritten<%= sourceId ? '&source=' + sourceId : '' %><%= search ? '&search=' + encodeURIComponent(search) : '' %>"
+         class="btn <%= status === 'rewritten' ? 'btn-info text-white' : 'btn-outline-primary' %>">已改写</a>
+      <a href="/news?status=published<%= sourceId ? '&source=' + sourceId : '' %><%= search ? '&search=' + encodeURIComponent(search) : '' %>"
+         class="btn <%= status === 'published' ? 'btn-success' : 'btn-outline-primary' %>">已发布</a>
+      <a href="/news?status=failed<%= sourceId ? '&source=' + sourceId : '' %><%= search ? '&search=' + encodeURIComponent(search) : '' %>"
+         class="btn <%= status === 'failed' ? 'btn-danger' : 'btn-outline-primary' %>">失败</a>
     </div>
-    
+
     <span class="text-muted ms-2">共 <%= total %> 条</span>
   </div>
-  
+
   <div class="ms-auto d-flex align-items-center" style="gap: 1rem;">
-    <!-- 搜索框（独立表单） -->
     <form id="searchForm" method="get" class="d-flex align-items-center">
       <input type="hidden" name="status" value="<%= status %>">
       <% if (sourceId) { %>
         <input type="hidden" name="source" value="<%= sourceId %>">
       <% } %>
       <div class="input-group" style="height: 38px; width: fit-content;">
-        <!-- 搜索输入框：移除多余高度，宽度固定240px -->
-        <input type="text" name="search" class="form-control" style="width: 240px; height: 100%;" placeholder="搜索..." value="<%= search %>">
-        <!-- 搜索按钮：高度继承父容器，垂直居中 -->
+        <input type="text" name="search" class="form-control" style="width: 240px; height: 100%;" placeholder="搜索标题或内容" value="<%= search %>">
         <button type="submit" class="btn btn-outline-secondary" style="height: 100%;"><i class="bi bi-search"></i></button>
-        <!-- 清除按钮：条件渲染，和搜索按钮同行 -->
         <% if (search || sourceId) { %>
-          <a href="/news?status=<%= status %>" class="btn btn-outline-secondary" style="height: 100%; line-height: 24px;" title="清除"><i class="bi bi-x"></i></a>
+          <a href="/news?status=<%= status %>" class="btn btn-outline-secondary" style="height: 100%; line-height: 24px;" title="清除筛选"><i class="bi bi-x"></i></a>
         <% } %>
       </div>
     </form>
-    
-    <!-- 信源筛选（独立表单） -->
+
     <form id="sourceFilterForm" method="get" class="d-flex align-items-center">
       <input type="hidden" name="status" value="<%= status %>">
       <% if (search) { %>
         <input type="hidden" name="search" value="<%= search %>">
       <% } %>
-      <select name="source" class="form-select form-select-sm" style="width: 130px;" onchange="document.getElementById('sourceFilterForm').submit()">
+      <select name="source" class="form-select form-select-sm" style="width: 140px;" onchange="document.getElementById('sourceFilterForm').submit()">
         <option value="">全部信源</option>
-        <% sources.filter(s => s.enabled).forEach(source => { %>
+        <% sources.filter((s) => s.enabled).forEach((source) => { %>
           <option value="<%= source.id %>" <%= String(sourceId) === String(source.id) ? 'selected' : '' %>><%= source.name %></option>
         <% }); %>
       </select>
     </form>
-    
-    <!-- 操作按钮 -->
-    <button class="btn btn-primary" onclick="fetchNews()">
+
+    <button class="btn btn-primary" onclick="fetchNews(event)">
       <i class="bi bi-cloud-download me-1"></i>抓取
     </button>
     <% if (status === 'pending') { %>
       <button class="btn btn-info text-white" onclick="batchRewrite()">
-        <i class="bi bi-magic me-1"></i>改写
+        <i class="bi bi-magic me-1"></i>批量改写
       </button>
     <% } %>
     <% if (status === 'rewritten') { %>
       <button class="btn btn-success" onclick="batchPublish()">
-        <i class="bi bi-send me-1"></i>发布
+        <i class="bi bi-send me-1"></i>批量发布
+      </button>
+    <% } %>
+    <% if (status === 'failed') { %>
+      <button class="btn btn-warning" onclick="batchResetFailed()">
+        <i class="bi bi-arrow-repeat me-1"></i>重置失败
       </button>
     <% } %>
     <button class="btn btn-danger" onclick="batchDelete()">
@@ -74,13 +71,13 @@
   </div>
 </div>
 
-<!-- 新闻列表 -->
 <div class="content-card">
   <div class="card-header">
     <h5 class="card-title">
       <% if (status === 'pending') { %><i class="bi bi-clock-history text-warning me-2"></i>待改写新闻<% } %>
       <% if (status === 'rewritten') { %><i class="bi bi-pencil-square text-info me-2"></i>已改写新闻<% } %>
       <% if (status === 'published') { %><i class="bi bi-check-circle text-success me-2"></i>已发布新闻<% } %>
+      <% if (status === 'failed') { %><i class="bi bi-exclamation-triangle text-danger me-2"></i>失败新闻<% } %>
     </h5>
   </div>
   <div class="card-body p-0">
@@ -94,21 +91,23 @@
             <th>来源</th>
             <th>标题</th>
             <% if (status === 'rewritten' || status === 'published') { %><th>改写标题</th><% } %>
+            <% if (status === 'failed') { %><th>失败原因</th><% } %>
             <th>时间</th>
             <th>状态</th>
-            <th width="200">操作</th>
+            <th width="220">操作</th>
           </tr>
         </thead>
         <tbody>
+          <% const colCount = 6 + ((status === 'rewritten' || status === 'published') ? 1 : 0) + (status === 'failed' ? 1 : 0); %>
           <% if (news.length === 0) { %>
             <tr>
-              <td colspan="7" class="text-center text-muted py-5">
+              <td colspan="<%= colCount %>" class="text-center text-muted py-5">
                 <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                暂无<%= status === 'pending' ? '待改写' : status === 'rewritten' ? '已改写' : '已发布' %>新闻
+                暂无当前状态的新闻
               </td>
             </tr>
           <% } else { %>
-            <% news.forEach(item => { %>
+            <% news.forEach((item) => { %>
               <tr>
                 <td>
                   <input type="checkbox" class="form-check-input news-checkbox" value="<%= item.id %>">
@@ -118,7 +117,7 @@
                 </td>
                 <td>
                   <a href="/news/<%= item.id %>" class="news-title" title="<%= item.title %>">
-                    <%= item.title.substring(0, 50) %><%= item.title.length > 50 ? '...' : '' %>
+                    <%= item.title.substring(0, 56) %><%= item.title.length > 56 ? '...' : '' %>
                   </a>
                 </td>
                 <% if (status === 'rewritten' || status === 'published') { %>
@@ -130,6 +129,13 @@
                     <% } else { %>
                       <span class="text-muted">-</span>
                     <% } %>
+                  </td>
+                <% } %>
+                <% if (status === 'failed') { %>
+                  <td class="text-danger">
+                    <span title="<%= item.error_message || '' %>">
+                      <%= (item.error_message || '-').substring(0, 60) %><%= item.error_message && item.error_message.length > 60 ? '...' : '' %>
+                    </span>
                   </td>
                 <% } %>
                 <td class="text-muted">
@@ -145,13 +151,18 @@
                 </td>
                 <td>
                   <% if (item.status === 'pending') { %>
-                    <button class="btn-action text-info" onclick="rewriteOne(<%= item.id %>)" title="改写">
+                    <button class="btn-action text-info" onclick="rewriteOne(<%= item.id %>, event)" title="改写">
                       <i class="bi bi-magic"></i>
                     </button>
                   <% } %>
                   <% if (item.status === 'rewritten') { %>
-                    <button class="btn-action text-success" onclick="publishOne(<%= item.id %>)" title="发布">
+                    <button class="btn-action text-success" onclick="publishOne(<%= item.id %>, event)" title="发布">
                       <i class="bi bi-send"></i>
+                    </button>
+                  <% } %>
+                  <% if (item.status === 'failed') { %>
+                    <button class="btn-action text-warning" onclick="resetFailedOne(<%= item.id %>, event)" title="重置失败">
+                      <i class="bi bi-arrow-repeat"></i>
                     </button>
                   <% } %>
                   <a href="/news/<%= item.id %>" class="btn-action" title="查看">
@@ -171,10 +182,9 @@
       </table>
     </div>
   </div>
-  
-  <!-- 分页 -->
+
   <% if (totalPages > 1) { %>
-    <% 
+    <%
       const buildPageUrl = (p) => {
         let url = `/news?status=${status}&page=${p}`;
         if (sourceId) url += `&source=${sourceId}`;
@@ -189,7 +199,7 @@
           <li class="page-item <%= page === 1 ? 'disabled' : '' %>">
             <a class="page-link" href="<%= buildPageUrl(page - 1) %>">上一页</a>
           </li>
-          <% for (let p = 1; p <= totalPages; p++) { %>
+          <% for (let p = 1; p <= totalPages; p += 1) { %>
             <li class="page-item <%= p === page ? 'active' : '' %>">
               <a class="page-link" href="<%= buildPageUrl(p) %>"><%= p %></a>
             </li>
@@ -204,163 +214,200 @@
 </div>
 
 <script>
-// 全选/取消全选
 document.getElementById('selectAll')?.addEventListener('change', function() {
-  document.querySelectorAll('.news-checkbox').forEach(cb => {
+  document.querySelectorAll('.news-checkbox').forEach((cb) => {
     cb.checked = this.checked;
   });
 });
 
-// 改写单条
-async function rewriteOne(newsId) {
-  const btn = event.target.closest('button');
+function getCheckedIds() {
+  return Array.from(document.querySelectorAll('.news-checkbox:checked')).map((cb) => cb.value);
+}
+
+async function rewriteOne(newsId, clickEvent) {
+  const btn = clickEvent.currentTarget;
   const originalHtml = btn.innerHTML;
   btn.innerHTML = '<i class="bi bi-arrow-clockwise spin"></i>';
   btn.disabled = true;
-  
+
   try {
     await apiFetch('/api/rewrite', {
       method: 'POST',
       body: JSON.stringify({ newsId })
     });
-    showToast('改写成功！', 'success');
-    setTimeout(() => location.reload(), 1000);
+    showToast('改写成功', 'success');
+    setTimeout(() => location.reload(), 800);
   } catch (error) {
     btn.innerHTML = originalHtml;
     btn.disabled = false;
   }
 }
 
-// 批量改写
 async function batchRewrite() {
-  const checked = document.querySelectorAll('.news-checkbox:checked');
-  if (checked.length === 0) {
+  const ids = getCheckedIds();
+  if (ids.length === 0) {
     showToast('请先选择新闻', 'warning');
     return;
   }
-  
-  if (!confirm('确定要改写选中的 ' + checked.length + ' 条新闻吗？')) return;
-  
+
+  if (!confirm(`确定要改写选中的 ${ids.length} 条新闻吗？`)) return;
+
   showToast('开始批量改写...', 'info');
-  
-  for (const cb of checked) {
+  for (const id of ids) {
     try {
       await apiFetch('/api/rewrite', {
         method: 'POST',
-        body: JSON.stringify({ newsId: cb.value })
+        body: JSON.stringify({ newsId: id })
       });
     } catch (error) {
-      console.error('改写失败:', cb.value);
+      console.error('改写失败:', id);
     }
-    await new Promise(r => setTimeout(r, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 1200));
   }
-  
-  showToast('批量改写完成！', 'success');
+
+  showToast('批量改写完成', 'success');
   setTimeout(() => location.reload(), 1000);
 }
 
-// 发布单条
-async function publishOne(newsId) {
+async function publishOne(newsId, clickEvent) {
   if (!confirm('确定要发布到微信公众号吗？')) return;
-  
-  const btn = event.target.closest('button');
+
+  const btn = clickEvent.currentTarget;
   const originalHtml = btn.innerHTML;
   btn.innerHTML = '<i class="bi bi-arrow-clockwise spin"></i>';
   btn.disabled = true;
-  
+
   try {
     await apiFetch('/api/publish', {
       method: 'POST',
       body: JSON.stringify({ newsId })
     });
-    showToast('发布成功！', 'success');
-    setTimeout(() => location.reload(), 1000);
+    showToast('发布成功', 'success');
+    setTimeout(() => location.reload(), 800);
   } catch (error) {
     btn.innerHTML = originalHtml;
     btn.disabled = false;
   }
 }
 
-// 批量发布
 async function batchPublish() {
-  const checked = document.querySelectorAll('.news-checkbox:checked');
-  if (checked.length === 0) {
+  const ids = getCheckedIds();
+  if (ids.length === 0) {
     showToast('请先选择新闻', 'warning');
     return;
   }
-  
-  if (!confirm('确定要发布选中的 ' + checked.length + ' 条新闻吗？')) return;
-  
+
+  if (!confirm(`确定要发布选中的 ${ids.length} 条新闻吗？`)) return;
+
   showToast('开始批量发布...', 'info');
-  
-  for (const cb of checked) {
+  for (const id of ids) {
     try {
       await apiFetch('/api/publish', {
         method: 'POST',
-        body: JSON.stringify({ newsId: cb.value })
+        body: JSON.stringify({ newsId: id })
       });
     } catch (error) {
-      console.error('发布失败:', cb.value);
+      console.error('发布失败:', id);
     }
-    await new Promise(r => setTimeout(r, 3000));
+    await new Promise((resolve) => setTimeout(resolve, 3000));
   }
-  
-  showToast('批量发布完成！', 'success');
+
+  showToast('批量发布完成', 'success');
   setTimeout(() => location.reload(), 1000);
 }
 
-// 删除新闻
+async function resetFailedOne(newsId, clickEvent) {
+  const btn = clickEvent.currentTarget;
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = '<i class="bi bi-arrow-clockwise spin"></i>';
+  btn.disabled = true;
+
+  try {
+    await apiFetch(`/api/news/${newsId}/reset`, {
+      method: 'POST'
+    });
+    showToast('已重置为待改写', 'success');
+    setTimeout(() => location.reload(), 800);
+  } catch (error) {
+    btn.innerHTML = originalHtml;
+    btn.disabled = false;
+  }
+}
+
+async function batchResetFailed() {
+  const ids = getCheckedIds();
+  if (ids.length === 0) {
+    showToast('请先选择失败任务', 'warning');
+    return;
+  }
+
+  if (!confirm(`确定要重置选中的 ${ids.length} 条失败任务吗？`)) return;
+
+  showToast('开始重置失败任务...', 'info');
+  for (const id of ids) {
+    try {
+      await apiFetch(`/api/news/${id}/reset`, {
+        method: 'POST'
+      });
+    } catch (error) {
+      console.error('重置失败:', id);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+
+  showToast('失败任务已重置', 'success');
+  setTimeout(() => location.reload(), 800);
+}
+
 async function deleteNews(newsId) {
   if (!confirm('确定要删除这条新闻吗？此操作不可恢复。')) return;
-  
+
   try {
-    await apiFetch('/api/news/' + newsId, { method: 'DELETE' });
-    showToast('删除成功！', 'success');
-    setTimeout(() => location.reload(), 1000);
+    await apiFetch(`/api/news/${newsId}`, { method: 'DELETE' });
+    showToast('删除成功', 'success');
+    setTimeout(() => location.reload(), 800);
   } catch (error) {
     console.error(error);
   }
 }
 
-// 批量删除
 async function batchDelete() {
-  const checked = document.querySelectorAll('.news-checkbox:checked');
-  if (checked.length === 0) {
+  const ids = getCheckedIds();
+  if (ids.length === 0) {
     showToast('请先选择要删除的新闻', 'warning');
     return;
   }
-  
-  if (!confirm('确定要删除选中的 ' + checked.length + ' 条新闻吗？此操作不可恢复。')) return;
-  
+
+  if (!confirm(`确定要删除选中的 ${ids.length} 条新闻吗？此操作不可恢复。`)) return;
+
   showToast('开始批量删除...', 'info');
   let successCount = 0;
   let failCount = 0;
-  
-  for (const cb of checked) {
+
+  for (const id of ids) {
     try {
-      await apiFetch('/api/news/' + cb.value, { method: 'DELETE' });
-      successCount++;
+      await apiFetch(`/api/news/${id}`, { method: 'DELETE' });
+      successCount += 1;
     } catch (error) {
-      console.error('删除失败:', cb.value);
-      failCount++;
+      console.error('删除失败:', id);
+      failCount += 1;
     }
-    await new Promise(r => setTimeout(r, 100)); // 限速
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  
-  showToast('批量删除完成！成功: ' + successCount + ', 失败: ' + failCount, successCount > 0 ? 'success' : 'warning');
+
+  showToast(`批量删除完成，成功 ${successCount}，失败 ${failCount}`, successCount > 0 ? 'success' : 'warning');
   setTimeout(() => location.reload(), 1000);
 }
 
-// 抓取新闻
-async function fetchNews() {
-  const btn = event.target.closest('button');
+async function fetchNews(clickEvent) {
+  const btn = clickEvent.currentTarget;
   const originalHtml = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = '<i class="bi bi-arrow-clockwise spin me-2"></i>抓取中...';
-  
+  btn.innerHTML = '<i class="bi bi-arrow-clockwise spin me-1"></i>抓取中...';
+
   try {
     await apiFetch('/api/fetch', { method: 'POST' });
-    showToast('抓取成功！', 'success');
+    showToast('抓取完成', 'success');
     setTimeout(() => location.reload(), 1000);
   } catch (error) {
     btn.disabled = false;
@@ -368,13 +415,3 @@ async function fetchNews() {
   }
 }
 </script>
-
-<style>
-.spin {
-  animation: spin 1s linear infinite;
-}
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-</style>

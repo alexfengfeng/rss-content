@@ -18,6 +18,7 @@ const FormData = require('form-data');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
+const { buildPublishContent, buildSummaryText } = require('./src/utils/articleFormatter');
 
 const APPID = process.env.WECHAT_APPID;
 const APPSECRET = process.env.WECHAT_APPSECRET;
@@ -46,11 +47,16 @@ async function getAccessToken() {
 /**
  * 上传永久素材（封面图片）
  */
-async function uploadCoverImage(token, imagePath) {
+async function uploadCoverImage(token, imageSource) {
   console.log('\n📤 上传封面图片...');
   
   const form = new FormData();
-  form.append('media', fs.createReadStream(imagePath));
+  if (/^https?:\/\//i.test(imageSource)) {
+    const imageResp = await axios.get(imageSource, { responseType: 'arraybuffer' });
+    form.append('media', Buffer.from(imageResp.data), { filename: 'cover.jpg' });
+  } else {
+    form.append('media', fs.createReadStream(imageSource));
+  }
   
   const resp = await axios.post(
     `https://api.weixin.qq.com/cgi-bin/material/add_material?access_token=${token}&type=image`,
@@ -216,24 +222,34 @@ async function main() {
   console.log('   字数:', article.rewritten_content?.length || 0);
   
   // 准备文章内容
-  let htmlContent = article.rewritten_content
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\n/g, '<br>');
-  
-  htmlContent += `<br><br><hr><br>原文链接：<a href="${article.link}">点击查看</a><br>文章来源：${article.source_name}`;
+  const content = article.rewritten_content || article.description || '';
+  const htmlContent = buildPublishContent(content, {
+    link: article.link,
+    sourceName: article.source_name
+  });
   
   // 使用默认封面或上传新封面
   let thumbMediaId = '';
   const coverPath = 'cover_18yo_entrepreneur.jpg';
-  if (fs.existsSync(coverPath)) {
-    thumbMediaId = await uploadCoverImage(token, coverPath);
+  const coverCandidates = [
+    article.image_url,
+    fs.existsSync(coverPath) ? coverPath : ''
+  ].filter(Boolean);
+
+  for (const coverCandidate of coverCandidates) {
+    try {
+      thumbMediaId = await uploadCoverImage(token, coverCandidate);
+      break;
+    } catch (error) {
+      console.warn(`⚠️ 封面上传失败，尝试下一个候选项: ${error.message}`);
+    }
   }
   
   // 构建文章对象
   const articleData = {
     title: article.rewritten_title.substring(0, 64),
     author: 'AI助手',
-    digest: article.description?.substring(0, 120) || '',
+    digest: buildSummaryText(content),
     content: htmlContent,
     thumb_media_id: thumbMediaId,
     show_cover_pic: 1,

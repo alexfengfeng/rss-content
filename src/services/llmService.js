@@ -35,10 +35,14 @@ function checkConfig() {
 }
 
 // 调用 LLM API
-async function callLLM(userContent, systemPrompt = REWRITE_SYSTEM_PROMPT) {
+async function callLLM(userContent, systemPrompt = REWRITE_SYSTEM_PROMPT, options = {}) {
   checkConfig();
 
   const url = `${LLM_BASE_URL}/v1/chat/completions`;
+  const {
+    temperature = 0.7,
+    maxTokens = 2000
+  } = options || {};
 
   const body = {
     model: LLM_MODEL,
@@ -46,8 +50,8 @@ async function callLLM(userContent, systemPrompt = REWRITE_SYSTEM_PROMPT) {
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userContent }
     ],
-    temperature: 0.7,
-    max_tokens: 2000
+    temperature,
+    max_tokens: maxTokens
   };
 
   try {
@@ -58,7 +62,7 @@ async function callLLM(userContent, systemPrompt = REWRITE_SYSTEM_PROMPT) {
         'Authorization': `Bearer ${LLM_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      timeout: 60000
+      timeout: 180000
     });
 
     return resp.data.choices[0].message.content;

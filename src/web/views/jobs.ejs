@@ -1,0 +1,93 @@
+<div class="mb-4">
+  <h1 class="h3 mb-2">任务日志</h1>
+  <p class="text-muted">查看最近的抓取、改写、发布和失败重置任务执行情况。</p>
+</div>
+
+<div class="row g-4 mb-4">
+  <% ['fetch', 'rewrite', 'publish', 'reset_failed'].forEach((jobType) => { %>
+    <% const items = jobStats.filter((item) => item.job_type === jobType); %>
+    <% const total = items.reduce((sum, item) => sum + item.count, 0); %>
+    <div class="col-md-3">
+      <div class="stat-card">
+        <div class="stat-label"><%= jobType %></div>
+        <div class="stat-value"><%= total %></div>
+        <div class="mt-2 small text-muted">
+          success: <%= items.find((item) => item.status === 'success')?.count || 0 %>,
+          partial: <%= items.find((item) => item.status === 'partial')?.count || 0 %>,
+          failed: <%= items.find((item) => item.status === 'failed')?.count || 0 %>
+        </div>
+      </div>
+    </div>
+  <% }); %>
+</div>
+
+<div class="content-card">
+  <div class="card-header">
+    <h5 class="card-title">
+      <i class="bi bi-clock-history text-primary me-2"></i>最近任务
+    </h5>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>任务类型</th>
+            <th>范围</th>
+            <th>触发方式</th>
+            <th>状态</th>
+            <th>结果</th>
+            <th>开始时间</th>
+            <th>结束时间</th>
+            <th>消息</th>
+            <th>详情</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (!jobRuns.length) { %>
+            <tr>
+              <td colspan="10" class="text-center text-muted py-5">
+                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                暂无任务日志
+              </td>
+            </tr>
+          <% } else { %>
+            <% jobRuns.forEach((job) => { %>
+              <tr>
+                <td>#<%= job.id %></td>
+                <td><code><%= job.job_type %></code></td>
+                <td><%= job.scope || '-' %></td>
+                <td><%= job.trigger_type %></td>
+                <td>
+                  <span class="status-badge status-<%= job.status === 'partial' ? 'rewritten' : job.status === 'running' ? 'pending' : job.status %>">
+                    <%= job.status %>
+                  </span>
+                </td>
+                <td>
+                  <span class="small">
+                    total <%= job.total_count %> /
+                    success <%= job.success_count %> /
+                    failed <%= job.failed_count %>
+                  </span>
+                </td>
+                <td class="text-muted"><%= job.started_at || '-' %></td>
+                <td class="text-muted"><%= job.finished_at || '-' %></td>
+                <td>
+                  <span title="<%= job.message || '' %>">
+                    <%= (job.message || '-').substring(0, 80) %><%= job.message && job.message.length > 80 ? '...' : '' %>
+                  </span>
+                </td>
+                <td>
+                  <a href="/jobs/<%= job.id %>" class="btn-action text-primary" title="查看详情">
+                    <i class="bi bi-box-arrow-up-right"></i>
+                  </a>
+                </td>
+              </tr>
+            <% }); %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
