@@ -49,11 +49,15 @@ async function main() {
         enabled: source.enabled !== false,
         keywords: source.keywords || [],
         blacklist: source.blacklist || [],
-        config: {
-          since: source.since,
-          language: source.language,
-          spokenLanguage: source.spokenLanguage
-        }
+        config: Object.fromEntries(
+          Object.entries({
+            since: source.since,
+            language: source.language,
+            spokenLanguage: source.spokenLanguage,
+            limit: source.limit,
+            provider: source.provider
+          }).filter(([, value]) => value !== undefined && value !== null && value !== '')
+        )
       });
       
       logger.info(`添加新闻源: ${source.name}`);

@@ -7,12 +7,14 @@
 ## 功能特性
 
 - 📰 **RSS 新闻抓取** - 支持 RSSHub 和标准 RSS 源
-- 🐙 **GitHub Trending** - 自动抓取 GitHub 每日/每周热门项目
-- 🤖 **AI 智能改写** - 使用大模型改写新闻内容
+- 🐙 **GitHub Trending** - 自动抓取 GitHub/Gitee 每日/每周/每月热门项目
+- 🤖 **AI 智能改写** - 使用大模型改写新闻内容，支持模板系统
 - 📱 **公众号自动发布** - 一键发布到微信公众号草稿箱
 - ⏰ **定时任务** - 支持自动抓取和定时发布
 - 🗃️ **本地数据库** - SQLite 存储，无需额外配置
 - 🔍 **关键词过滤** - 支持正向/黑名单关键词筛选
+- 🎨 **封面生成** - 自动为文章生成封面图片
+- 📝 **模板管理** - 内置多种改写模板，支持自定义 Prompt
 
 ## 快速开始
 
@@ -70,6 +72,13 @@ npm start
 3. 自动改写新闻
 4. 按设定时间定时执行（默认每2小时抓取，每天9点发布）
 
+### 方式六：订阅账号发布（无草稿箱支持）
+
+如果你的公众号是订阅号（无草稿箱权限），使用以下命令直接发布：
+```bash
+npm run publish:sub
+```
+
 ## 使用方式
 
 ### 方式一：全自动模式（推荐）
@@ -100,9 +109,24 @@ npm run fetch:github
 npm run rewrite
 ```
 
+#### 改写 GitHub 项目
+```bash
+npm run rewrite:github
+```
+
 #### 发布到公众号
 ```bash
 npm run publish
+```
+
+#### 订阅账号直接发布（无草稿箱）
+```bash
+npm run publish:sub
+```
+
+#### 重试失败的项目
+```bash
+npm run retry:failed
 ```
 
 ### 方式三：交互式开发模式
@@ -135,6 +159,8 @@ npm start
 - 📊 **仪表盘** - 实时统计、快捷操作、最新动态
 - 📰 **新闻管理** - 查看、筛选、批量改写和发布
 - 📡 **信源管理** - 添加、编辑、删除 RSS 源
+- 📝 **模板管理** - 管理 AI 改写模板和 Prompt
+- 📋 **任务日志** - 查看后台任务执行记录
 - ⚙️ **系统配置** - 查看当前配置状态
 
 **界面预览：**
@@ -327,12 +353,14 @@ npm run fetch:github
 | `WECHAT_APPID` | 公众号 APPID | 否 | - |
 | `RSSHUB_URL` | RSSHub 地址 | 否 | `http://localhost:1200` |
 | `WEB_PORT` | Web 管理界面端口 | 否 | `3000` |
+| `DB_PATH` | SQLite 数据库路径 | 否 | `./data/news.db` |
 | `FETCH_LIMIT` | 每次抓取数量 | 否 | `20` |
 | `REWRITE_BATCH_SIZE` | 每次改写数量 | 否 | `5` |
 | `PUBLISH_BATCH_SIZE` | 每次发布数量 | 否 | `3` |
 | `FETCH_CRON` | 抓取定时 (Cron) | 否 | `0 */2 * * *` |
 | `PUBLISH_CRON` | 发布定时 (Cron) | 否 | `0 9 * * *` |
 | `LOG_LEVEL` | 日志级别 | 否 | `info` |
+| `GITHUB_TOKEN` | GitHub API Token | 否 | - |
 
 ## 项目结构
 
@@ -346,16 +374,20 @@ news-to-wechat/
 │   │   ├── rssService.js        # RSS 抓取服务
 │   │   ├── githubTrendingService.js  # GitHub Trending 抓取服务
 │   │   ├── llmService.js        # AI 改写服务
-│   │   └── wechatService.js     # 公众号发布服务
+│   │   ├── wechatService.js     # 公众号发布服务
+│   │   └── jobService.js        # 任务编排服务
 │   ├── scripts/
 │   │   ├── fetchNews.js         # 抓取脚本
 │   │   ├── fetchGithubTrending.js  # GitHub Trending 抓取脚本
 │   │   ├── rewriteNews.js       # 改写脚本
+│   │   ├── rewriteGithubProjects.js # GitHub 项目改写脚本
 │   │   ├── publishToWechat.js   # 发布脚本
+│   │   ├── retryFailedNews.js   # 重试失败项目
 │   │   ├── initSources.js       # 初始化新闻源
 │   │   ├── viewNews.js          # 查看新闻脚本
 │   │   ├── devMode.js           # 交互式开发模式
-│   │   └── migrate.js           # 数据库迁移脚本
+│   │   ├── migrate.js           # 数据库迁移脚本
+│   │   └── testGithubTrending.js # GitHub Trending 测试
 │   ├── web/                     # Web 管理界面
 │   │   ├── server.js            # Express 服务器
 │   │   ├── index.js             # Web 启动入口
@@ -364,16 +396,26 @@ news-to-wechat/
 │   │   │   ├── dashboard.ejs    # 仪表盘
 │   │   │   ├── news.ejs         # 新闻列表
 │   │   │   ├── news-detail.ejs  # 新闻详情
+│   │   │   ├── news-edit.ejs    # 新闻编辑
 │   │   │   ├── sources.ejs      # 信源管理
 │   │   │   ├── source-form.ejs  # 信源表单
+│   │   │   ├── templates.ejs    # 模板管理
+│   │   │   ├── template-form.ejs # 模板表单
+│   │   │   ├── jobs.ejs         # 任务日志
+│   │   │   ├── job-detail.ejs   # 任务详情
 │   │   │   ├── settings.ejs     # 系统配置
 │   │   │   └── error.ejs        # 错误页面
 │   │   └── public/              # 静态资源
 │   └── utils/
-│       └── logger.js            # 日志工具
+│       ├── logger.js            # 日志工具
+│       ├── articleFormatter.js  # 内容格式化
+│       └── coverGenerator.js    # 封面图片生成
 ├── config/
-│   └── sources.json             # 新闻源配置
+│   ├── sources.json             # 新闻源配置
+│   └── sources.example.json     # 新闻源配置示例
 ├── data/                        # 数据库目录
+├── docs/                        # 文档目录
+├── publish-subscription.js      # 订阅账号发布入口
 ├── .env                         # 环境变量
 ├── .env.example                 # 环境变量模板
 ├── .gitignore
@@ -385,13 +427,38 @@ news-to-wechat/
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│  RSS 源     │───>│  抓取新闻   │───>│  AI 改写    │───>│  公众号发布 │
-│             │    │             │    │             │    │             │
+│  RSS/GitHub │───>│  抓取新闻   │───>│  AI 改写    │───>│  公众号发布 │
+│   数据源    │    │             │    │             │    │             │
 │ - 36氪      │    │ - 去重      │    │ - 重写标题  │    │ - 草稿箱    │
-│ - 虎嗅      │    │ - 关键词过滤│    │ - 改写正文  │    │ - 手动发布  │
+│ - 虎嗅      │    │ - 关键词过滤│    │ - 改写正文  │    │ - 直接发布  │
 │ - RSSHub    │    │ - 存数据库  │    │ - 风格优化  │    │             │
+│ - GitHub    │    │             │    │             │    │             │
 └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
 ```
+
+## 数据库表结构
+
+### sources - 新闻源配置
+- `id`, `name`, `type` (rsshub/rss/github), `route`, `enabled`
+- `keywords`, `blacklist` (JSON 数组)
+- `config` (JSON，源特定配置)
+
+### news - 抓取的文章
+- `id`, `source_id`, `guid` (唯一标识), `title`, `description`, `link`, `pub_date`
+- `image_url`, `project_meta` (GitHub 项目 JSON 数据)
+- `rewritten_title`, `rewritten_content`, `rewritten_at`
+- `status` (pending/rewritten/published/failed)
+- `published_at`, `wechat_media_id`, `error_message`
+
+### rewrite_templates - AI 改写模板
+- `id`, `name`, `description`, `system_prompt`, `user_prompt`
+- `is_enabled`, `is_default`
+- 内置模板：默认公众号模板、新闻资讯模板、深度分析模板、开源项目改写模板、快讯精编模板
+
+### job_runs - 后台任务执行日志
+- `id`, `job_type` (fetch/rewrite/publish/reset_failed), `scope`, `trigger_type`
+- `status` (running/success/partial/failed)
+- `total_count`, `success_count`, `failed_count`, `message`, `details` (JSON)
 
 ## 微信公众号配置（官方 API）
 
@@ -421,6 +488,32 @@ news-to-wechat/
 - 确保你的公众号是**认证服务号**，否则草稿箱接口无法使用
 
 📖 **详细步骤：** 查看 [docs/WECHAT_OFFICIAL_SETUP.md](docs/WECHAT_OFFICIAL_SETUP.md)
+
+## 安全注意事项
+
+### 永远不要提交的内容
+- `.env` - 包含 API Key 和公众号密钥
+- `data/news.db` - 本地数据库
+- WeChat 密钥 (APPID/APPSECRET)
+
+### API Key 处理
+- 使用 `.env.example` 作为新配置项的模板
+- 日志中不要输出完整的 API Key（使用 `***` + 后4位）
+
+### 公众号 API 限制
+- 草稿箱 API (`draft/add`) 仅适用于**认证服务号**
+- 订阅号必须使用 `publish:sub` 或直接发布 API
+- 常见错误：`40007` (无效的 media_id)、`48001` (未授权 API)
+
+## 故障排除快速参考
+
+| 问题 | 解决方案 |
+|------|---------|
+| `LLM_API_KEY not configured` | 在 `.env` 文件中设置 |
+| `draft/add 40007 error` | 账号是订阅号，使用 `npm run publish:sub` |
+| RSS 抓取失败 | 检查 RSSHub URL，验证源路由 |
+| 图片无法显示 | 验证图片 URL 可访问，格式为 JPG/PNG |
+| 数据库锁定 | 确保只有一个进程访问 `data/news.db` |
 
 ## 常见问题
 
@@ -458,6 +551,34 @@ A: 使用开发模式：
 npm run dev
 ```
 可以查看每一步的中间结果。
+
+### Q: 如何测试 GitHub Trending 抓取?
+
+A: 运行测试脚本：
+```bash
+npm run test:github
+```
+
+### Q: 如何添加自定义改写模板?
+
+A: 
+1. 通过 Web 界面访问 `/templates`
+2. 点击"新建模板"
+3. 填写模板名称、描述、System Prompt 和 User Prompt
+4. 使用 `{{title}}`、`{{content}}` 等变量占位符
+
+## 技术栈
+
+| 层级 | 技术 |
+|------|------|
+| 运行时 | Node.js (CommonJS) |
+| Web 框架 | Express.js 5.x |
+| 模板引擎 | EJS + express-ejs-layouts |
+| 数据库 | SQLite3 |
+| HTTP 客户端 | Axios |
+| 任务调度 | node-cron |
+| RSS 解析 | rss-parser |
+| 图片处理 | canvas |
 
 ## 许可证
 

@@ -75,11 +75,22 @@ function parseJobRun(jobRun) {
 }
 
 async function rewriteNewsBySource(news, options = {}) {
-  if (news.source_type === 'github') {
+  if (news.source_type === 'github' && /github\.com/i.test(news.link || '')) {
     return rewriteGithubProject(news);
   }
 
-  return rewriteNews(news.title, news.description, news.link, options);
+  const nextOptions = { ...options };
+  if (
+    !nextOptions.templateId &&
+    /(github\.com|gitee\.com)/i.test(news.link || '')
+  ) {
+    const template = await db.getRewriteTemplateByName('开源项目改写模板');
+    if (template?.id) {
+      nextOptions.templateId = template.id;
+    }
+  }
+
+  return rewriteNews(news.title, news.description, news.link, nextOptions);
 }
 
 app.use(express.json());

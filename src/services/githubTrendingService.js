@@ -8,6 +8,7 @@ const logger = require('../utils/logger');
 const GITHUB_TRENDING_URL = 'https://github.com/trending';
 const GITHUB_API_BASE = 'https://api.github.com';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const GITEE_TRENDING_URL = 'https://gitee.com/explore/default';
 const MAX_README_LENGTH = 12000;
 
 function buildGithubHeaders(accept = 'application/vnd.github+json') {
@@ -66,17 +67,38 @@ function parseSourceConfig(source) {
   }
 }
 
+function getProjectProvider(source = {}) {
+  const config = parseSourceConfig(source);
+  if (config.provider) {
+    return String(config.provider).toLowerCase();
+  }
+
+  if (/gitee\.com/i.test(source.route || '')) {
+    return 'gitee';
+  }
+
+  return 'github';
+}
+
 function buildRequestConfig(source) {
   const sourceConfig = parseSourceConfig(source);
-  const route = (source?.route || GITHUB_TRENDING_URL).trim() || GITHUB_TRENDING_URL;
+  const provider = getProjectProvider(source);
+  const fallbackRoute = provider === 'gitee' ? GITEE_TRENDING_URL : GITHUB_TRENDING_URL;
+  const route = (source?.route || fallbackRoute).trim() || fallbackRoute;
   const since = sourceConfig.since || source.since || 'daily';
   const spokenLanguage = sourceConfig.spokenLanguage || source.spokenLanguage || '';
   const language = sourceConfig.language || source.language || '';
-  const limit = Math.max(1, Math.min(parseInt(sourceConfig.limit || source.limit, 10) || 10, 25));
+  const defaultLimit = provider === 'gitee' ? 20 : 10;
+  const limit = Math.max(1, Math.min(parseInt(sourceConfig.limit || source.limit, 10) || defaultLimit, 25));
 
   let url = route;
   if (!/^https?:\/\//i.test(url)) {
-    url = GITHUB_TRENDING_URL;
+    url = fallbackRoute;
+  }
+
+  if (provider === 'gitee') {
+    url = url.replace(/\/explore(?:\/all|\/default|\/index)?\/?$/i, '/explore/default');
+    return { provider, url, limit };
   }
 
   if (language) {
@@ -86,10 +108,11 @@ function buildRequestConfig(source) {
   const params = new URLSearchParams();
   params.set('since', since);
   if (spokenLanguage) {
-    params.set('spoken_language', spokenLanguage);
+    params.set('spoken_language_code', spokenLanguage);
   }
 
   return {
+    provider,
     url: `${url}?${params.toString()}`,
     limit
   };
@@ -133,6 +156,85 @@ function parseTrendingPage(html, source) {
       todayStars: parseNumber(todayStarsMatch ? todayStarsMatch[1] : '0')
     };
   }).filter(Boolean);
+}
+
+function stripTags(value = '') {
+  return decodeHtmlEntities(String(value).replace(/<[^>]+>/g, ' '));
+}
+
+function isExcludedProjectPath(fullName = '') {
+  const blocked = new Set([
+    'explore',
+    'features',
+    'organizations',
+    'enterprise',
+    'about',
+    'events',
+    'education',
+    'help',
+    'login',
+    'signup'
+  ]);
+
+  const [owner, name] = String(fullName || '').split('/');
+  if (!owner || !name) return true;
+  if (blocked.has(owner.toLowerCase())) return true;
+  if (/\.(png|jpg|jpeg|gif|svg|webp)$/i.test(name)) return true;
+  return false;
+}
+
+function parseGiteeExplorePage(html, source, limit = 20) {
+  const headingRegex = /<h[23][^>]*>[\s\S]*?<a[^>]+href="\/([^/"?#]+\/[^/"?#]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<\/h[23]>/gi;
+  const anchorRegex = /<a[^>]+href="\/([^/"?#]+\/[^/"?#]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  const projects = [];
+  const seen = new Set();
+  let match;
+
+  function pushProject(fullName, index) {
+    if (!fullName || seen.has(fullName) || isExcludedProjectPath(fullName) || projects.length >= limit) {
+      return;
+    }
+
+    const [owner, name] = fullName.split('/');
+    const block = html.slice(Math.max(0, index - 200), index + 2200);
+    const descriptionMatch = block.match(/<p[^>]*>([\s\S]*?)<\/p>/i)
+      || block.match(/<div[^>]*class="[^"]*(?:project|description|desc)[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+    const languageMatch = block.match(/(?:语言|Language)[^<]{0,20}<[^>]*>([^<]+)</i)
+      || block.match(/<span[^>]*class="[^"]*language[^"]*"[^>]*>([^<]+)</i);
+    const description = stripTags(descriptionMatch ? descriptionMatch[1] : '');
+    const language = stripTags(languageMatch ? languageMatch[1] : '');
+
+    projects.push({
+      source_id: source.id,
+      owner,
+      name,
+      fullName,
+      title: `${name} - ${owner}`,
+      link: `https://gitee.com/${fullName}`,
+      description: description || `Gitee 热门项目：${fullName}`,
+      platform: 'gitee',
+      language
+    });
+
+    seen.add(fullName);
+  }
+
+  while ((match = headingRegex.exec(html)) !== null && projects.length < limit) {
+    const fullName = String(match[1] || '').trim();
+    pushProject(fullName, match.index);
+  }
+
+  while ((match = anchorRegex.exec(html)) !== null && projects.length < limit) {
+    const fullName = String(match[1] || '').trim();
+    pushProject(fullName, match.index);
+  }
+
+  if (projects.length > 0) {
+    logger.info(`Gitee API 解析到 ${projects.length} 个热门项目`);
+    return projects;
+  }
+
+  throw new Error('Gitee API 未返回可用项目列表');
 }
 
 async function mapWithConcurrency(items, limit, mapper) {
@@ -349,14 +451,32 @@ async function fetchGithubTrending(source) {
   const { url, limit } = buildRequestConfig(source);
   logger.info(`正在抓取 GitHub Trending: ${url}`);
 
-  const resp = await axios.get(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8'
-    },
-    timeout: 30000
-  });
+  let resp;
+  try {
+    resp = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8'
+      },
+      timeout: 30000
+    });
+  } catch (error) {
+    if (error.response?.status === 405 && url.includes('spoken_language_code=')) {
+      const retryUrl = url.replace(/([?&])spoken_language_code=[^&]+&?/, '$1').replace(/[?&]$/, '');
+      logger.warn(`GitHub Trending 返回 405，已降级重试: ${retryUrl}`);
+      resp = await axios.get(retryUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8'
+        },
+        timeout: 30000
+      });
+    } else {
+      throw error;
+    }
+  }
 
   const seeds = parseTrendingPage(resp.data, source).slice(0, limit);
   const projects = await mapWithConcurrency(seeds, 4, async (seed) => {
@@ -417,9 +537,177 @@ async function fetchGithubTrending(source) {
   return projects;
 }
 
+async function fetchGiteeTrending(source) {
+  const { url, limit } = buildRequestConfig(source);
+  logger.info(`正在抓取 Gitee 热门项目: ${url}`);
+
+  const candidateUrls = [
+    url,
+    url.replace('/explore/default', '/explore/index'),
+    url.replace('/explore/default', '/explore')
+  ];
+
+  let resp = null;
+  let lastError = null;
+
+  for (const candidateUrl of [...new Set(candidateUrls)]) {
+    try {
+      resp = await axios.get(candidateUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+          Referer: 'https://gitee.com/explore',
+          Origin: 'https://gitee.com',
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache'
+        },
+        timeout: 30000
+      });
+      if (candidateUrl !== url) {
+        logger.warn(`Gitee 热门页已切换到备用地址: ${candidateUrl}`);
+      }
+      break;
+    } catch (error) {
+      lastError = error;
+      if (error.response?.status !== 405) {
+        throw error;
+      }
+      logger.warn(`Gitee 地址返回 405，尝试备用地址: ${candidateUrl}`);
+    }
+  }
+
+  if (!resp) {
+    throw lastError || new Error('Gitee 热门页面获取失败');
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const projects = parseGiteeExplorePage(resp.data, source, limit).map((seed) => ({
+    source_id: source.id,
+    guid: `gitee-${seed.fullName}-${today}`,
+    title: seed.title,
+    description: seed.description,
+    link: seed.link,
+    pub_date: new Date().toISOString(),
+    image_url: null,
+    project_meta: JSON.stringify({
+      platform: 'gitee',
+      repoFullName: seed.fullName,
+      owner: seed.owner,
+      name: seed.name,
+      link: seed.link,
+      description: seed.description,
+      language: seed.language || '',
+      stars: 0,
+      forks: 0,
+      watchers: 0,
+      openIssues: 0,
+      topics: [],
+      homepage: '',
+      license: '仓库信息未明确说明',
+      defaultBranch: 'master',
+      ownerAvatar: '',
+      socialPreview: '',
+      todayStars: 0,
+      readmePath: '',
+      readmeExcerpt: '',
+      quickStartHints: [],
+      techStackHints: seed.language ? [seed.language] : [],
+      rootEntries: [],
+      showcaseImages: [],
+      heroImage: ''
+    })
+  }));
+
+  logger.info(`解析到 ${projects.length} 个 Gitee 热门项目`);
+  return projects;
+}
+
+async function fetchGiteeTrendingViaApi(source) {
+  const { limit } = buildRequestConfig(source);
+  const sourceConfig = parseSourceConfig(source);
+  const query = String(sourceConfig.query || source.query || '开源').trim() || '开源';
+  const today = new Date().toISOString().slice(0, 10);
+  const params = new URLSearchParams({
+    q: query,
+    sort: 'stars_count',
+    order: 'desc',
+    per_page: String(limit),
+    page: '1'
+  });
+
+  logger.info(`正在通过 Gitee API 抓取热门项目: https://gitee.com/api/v5/search/repositories?${params.toString()}`);
+
+  const resp = await axios.get(`https://gitee.com/api/v5/search/repositories?${params.toString()}`, {
+    headers: {
+      'User-Agent': 'NewsToWeChat/1.0',
+      Accept: 'application/json'
+    },
+    timeout: 30000
+  });
+
+  const items = Array.isArray(resp.data)
+    ? resp.data
+    : Array.isArray(resp.data?.data)
+      ? resp.data.data
+      : Array.isArray(resp.data?.items)
+        ? resp.data.items
+        : Array.isArray(resp.data?.list)
+          ? resp.data.list
+          : [];
+  const projects = items.slice(0, limit).map((item) => {
+    const owner = item.owner?.login || item.namespace?.name || item.owner_name || '';
+    const name = item.name || item.path || item.full_name?.split('/').pop() || '';
+    const fullName = item.full_name || (owner && name ? `${owner}/${name}` : name);
+    const link = item.html_url || item.url || `https://gitee.com/${fullName}`;
+    const description = item.description || item.detail || `Gitee 热门项目：${fullName}`;
+    const language = item.language || '';
+
+    return {
+      source_id: source.id,
+      guid: `gitee-${fullName}-${today}`,
+      title: `${name} - ${owner}`,
+      description,
+      link,
+      pub_date: item.updated_at || new Date().toISOString(),
+      image_url: null,
+      project_meta: JSON.stringify({
+        platform: 'gitee',
+        repoFullName: fullName,
+        owner,
+        name,
+        link,
+        description,
+        language,
+        stars: item.stars_count || item.stargazers_count || 0,
+        forks: item.forks_count || 0,
+        watchers: item.watchers_count || item.watchers || 0,
+        openIssues: item.open_issues_count || 0,
+        topics: item.programming_language ? [item.programming_language] : [],
+        homepage: item.homepage || '',
+        license: item.license?.name || item.license || '仓库信息未明确说明',
+        defaultBranch: item.default_branch || 'master',
+        ownerAvatar: item.owner?.avatar_url || '',
+        socialPreview: '',
+        todayStars: 0,
+        readmePath: '',
+        readmeExcerpt: '',
+        quickStartHints: [],
+        techStackHints: language ? [language] : [],
+        rootEntries: [],
+        showcaseImages: [],
+        heroImage: ''
+      })
+    };
+  }).filter((item) => item.title && item.link);
+
+  logger.info(`Gitee API 解析到 ${projects.length} 个热门项目`);
+  return projects;
+}
+
 async function processAndSaveProjects(source, projects) {
   const insertedCount = await db.insertManyNews(projects);
-  logger.info(`[GitHub Trending] 新增 ${insertedCount}/${projects.length} 个项目`);
+  logger.info(`[热门项目] 新增 ${insertedCount}/${projects.length} 个项目`);
   return { source: source.name, total: projects.length, inserted: insertedCount };
 }
 
@@ -795,11 +1083,15 @@ async function rewriteGithubProject(project) {
 
 async function fetchAndUpdateGithub(source) {
   try {
-    const projects = await fetchGithubTrending(source);
+    const provider = getProjectProvider(source);
+    const projects = provider === 'gitee'
+      ? await fetchGiteeTrendingViaApi(source)
+      : await fetchGithubTrending(source);
     return await processAndSaveProjects(source, projects);
   } catch (error) {
-    logger.error(`抓取 GitHub Trending 失败: ${error.message}`);
-    return { source: source.name, error: error.message };
+    const message = error?.message || String(error || 'Unknown error');
+    logger.error(`[热门项目抓取失败] ${source.name}: ${message}`);
+    return { source: source.name, error: message };
   }
 }
 
@@ -808,11 +1100,11 @@ async function fetchAllGithubSources() {
   const githubSources = sources.filter((source) => source.type === 'github');
 
   if (githubSources.length === 0) {
-    logger.info('未找到启用的 GitHub 源');
+    logger.info('未找到启用的热门项目源');
     return { total: 0, success: 0, failed: 0, details: [] };
   }
 
-  logger.info(`开始抓取 ${githubSources.length} 个 GitHub 源...`);
+  logger.info(`开始抓取 ${githubSources.length} 个热门项目源...`);
   const results = await Promise.allSettled(githubSources.map((source) => fetchAndUpdateGithub(source)));
 
   const summary = {
@@ -824,8 +1116,13 @@ async function fetchAllGithubSources() {
 
   results.forEach((result, index) => {
     if (result.status === 'fulfilled') {
-      summary.success += 1;
-      summary.details.push(result.value);
+      if (result.value && Object.prototype.hasOwnProperty.call(result.value, 'error')) {
+        summary.failed += 1;
+        summary.details.push(result.value);
+      } else {
+        summary.success += 1;
+        summary.details.push(result.value);
+      }
     } else {
       summary.failed += 1;
       summary.details.push({

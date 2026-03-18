@@ -8,11 +8,11 @@ const logger = require('../utils/logger');
 
 async function main() {
   try {
-    logger.info('========== 开始抓取 GitHub Trending ==========');
+    logger.info('========== 开始抓取热门项目 ==========');
     const result = await fetchAllGithubSources();
     
     logger.info('========== 抓取完成 ==========');
-    logger.info(`总计：${result.total} 个 GitHub 源`);
+    logger.info(`总计：${result.total} 个热门项目源`);
     logger.info(`成功：${result.success} 个`);
     logger.info(`失败：${result.failed} 个`);
     
@@ -27,7 +27,7 @@ async function main() {
     
     process.exit(0);
   } catch (error) {
-    logger.error('抓取 GitHub Trending 失败:', error.message);
+    logger.error('抓取热门项目源失败:', error.message);
     process.exit(1);
   }
 }

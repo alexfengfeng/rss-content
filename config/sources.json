@@ -59,5 +59,16 @@
     "spokenLanguage": "",
     "keywords": [],
     "blacklist": []
+  },
+  {
+    "name": "Gitee 热门项目 Daily Top 20",
+    "type": "github",
+    "route": "https://gitee.com/explore/default",
+    "enabled": true,
+    "limit": 20,
+    "query": "开源",
+    "provider": "gitee",
+    "keywords": [],
+    "blacklist": []
   }
 ]

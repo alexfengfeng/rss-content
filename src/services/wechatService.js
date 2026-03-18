@@ -3,6 +3,7 @@ const logger = require('../utils/logger');
 const fs = require('fs');
 const path = require('path');
 const { processCoverImage } = require('../utils/coverGenerator');
+const { normalizePublishBody, buildSummaryText } = require('../utils/articleFormatter');
 
 // 微信官方 API 配置
 const WECHAT_APPID = process.env.WECHAT_APPID;
@@ -136,6 +137,10 @@ async function publishArticle({
 }) {
   try {
     const accessToken = await getAccessToken();
+    const normalizedContent = normalizePublishBody(content);
+    const normalizedSummary = summary
+      ? buildSummaryText(summary, 120)
+      : buildSummaryText(content, 120);
 
     // 处理封面图片（使用缓存避免重复上传）
     // thumb_media_id 是必填项！
@@ -161,8 +166,8 @@ async function publishArticle({
     const article = {
       title: title.substring(0, 64),
       author: author ? author.substring(0, 16) : '',
-      digest: summary.substring(0, 120),
-      content: content,
+      digest: normalizedSummary,
+      content: normalizedContent,
       thumb_media_id: thumbMediaId,
       show_cover_pic: 1,
       need_open_comment: 0,
