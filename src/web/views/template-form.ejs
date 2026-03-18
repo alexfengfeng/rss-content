@@ -1,0 +1,83 @@
+<% const isEdit = !!template; %>
+
+<div class="mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/">首页</a></li>
+      <li class="breadcrumb-item"><a href="/templates">改写模板</a></li>
+      <li class="breadcrumb-item active" aria-current="page"><%= isEdit ? '编辑模板' : '新建模板' %></li>
+    </ol>
+  </nav>
+  <h1 class="h3 mb-2"><%= isEdit ? '编辑改写模板' : '新建改写模板' %></h1>
+</div>
+
+<div class="content-card">
+  <div class="card-body">
+    <form id="templateForm">
+      <div class="mb-3">
+        <label class="form-label">模板名称</label>
+        <input type="text" class="form-control" name="name" value="<%= template?.name || '' %>" required>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">模板说明</label>
+        <input type="text" class="form-control" name="description" value="<%= template?.description || '' %>">
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">System Prompt</label>
+        <textarea class="form-control" name="system_prompt" rows="10" required><%= template?.system_prompt || '' %></textarea>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">User Prompt</label>
+        <textarea class="form-control" name="user_prompt" rows="10" required><%= template?.user_prompt || '' %></textarea>
+        <div class="form-text">支持变量：<code>{{title}}</code>、<code>{{description}}</code>、<code>{{link}}</code></div>
+      </div>
+
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="checkbox" id="is_enabled" name="is_enabled" <%= template?.is_enabled !== 0 ? 'checked' : '' %>>
+        <label class="form-label mb-0" for="is_enabled">启用模板</label>
+      </div>
+
+      <div class="form-check mb-4">
+        <input class="form-check-input" type="checkbox" id="is_default" name="is_default" <%= template?.is_default ? 'checked' : '' %>>
+        <label class="form-label mb-0" for="is_default">设为默认模板</label>
+      </div>
+
+      <div class="d-flex gap-2">
+        <a href="/templates" class="btn btn-outline-secondary">取消</a>
+        <button type="submit" class="btn btn-primary"><%= isEdit ? '保存修改' : '创建模板' %></button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.getElementById('templateForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+
+  const formData = new FormData(this);
+  const payload = {
+    name: formData.get('name'),
+    description: formData.get('description'),
+    system_prompt: formData.get('system_prompt'),
+    user_prompt: formData.get('user_prompt'),
+    is_enabled: document.getElementById('is_enabled').checked,
+    is_default: document.getElementById('is_default').checked
+  };
+
+  try {
+    await apiFetch('<%= isEdit ? `/api/templates/${template.id}` : "/api/templates" %>', {
+      method: '<%= isEdit ? "PUT" : "POST" %>',
+      body: JSON.stringify(payload)
+    });
+    showToast('模板保存成功', 'success');
+    setTimeout(() => {
+      location.href = '/templates';
+    }, 800);
+  } catch (error) {
+    console.error(error);
+  }
+});
+</script>

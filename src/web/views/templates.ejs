@@ -1,0 +1,86 @@
+<div class="mb-4">
+  <h1 class="h3 mb-2">改写模板</h1>
+  <p class="text-muted">管理不同风格的新闻改写模板，详细页可按模板重新改写。</p>
+</div>
+
+<div class="action-bar">
+  <span class="text-muted">模板管理</span>
+  <a href="/templates/new" class="btn btn-primary ms-auto">
+    <i class="bi bi-plus-lg me-2"></i>新建模板
+  </a>
+</div>
+
+<div class="content-card">
+  <div class="card-header">
+    <h5 class="card-title">
+      <i class="bi bi-file-earmark-text text-primary me-2"></i>模板列表
+    </h5>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>名称</th>
+            <th>说明</th>
+            <th>状态</th>
+            <th>默认</th>
+            <th>更新时间</th>
+            <th width="180">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (!templates.length) { %>
+            <tr>
+              <td colspan="6" class="text-center text-muted py-5">暂无改写模板</td>
+            </tr>
+          <% } else { %>
+            <% templates.forEach((template) => { %>
+              <tr>
+                <td><strong><%= template.name %></strong></td>
+                <td><%= template.description || '-' %></td>
+                <td>
+                  <span class="status-badge status-<%= template.is_enabled ? 'published' : 'failed' %>">
+                    <%= template.is_enabled ? '启用' : '禁用' %>
+                  </span>
+                </td>
+                <td>
+                  <% if (template.is_default) { %>
+                    <span class="badge bg-success">默认</span>
+                  <% } else { %>
+                    <span class="text-muted">-</span>
+                  <% } %>
+                </td>
+                <td class="text-muted"><%= template.updated_at || '-' %></td>
+                <td>
+                  <a href="/templates/<%= template.id %>/edit" class="btn-action text-warning" title="编辑">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+                  <% if (!template.is_default) { %>
+                    <button class="btn-action text-danger" onclick="deleteTemplate(<%= template.id %>)" title="删除">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  <% } %>
+                </td>
+              </tr>
+            <% }); %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+async function deleteTemplate(templateId) {
+  if (!confirm('确定要删除这个模板吗？')) return;
+
+  try {
+    await apiFetch(`/api/templates/${templateId}`, { method: 'DELETE' });
+    showToast('模板已删除', 'success');
+    setTimeout(() => location.reload(), 800);
+  } catch (error) {
+    console.error(error);
+  }
+}
+</script>

@@ -34,6 +34,12 @@
         </a>
       </li>
       <li class="nav-item">
+        <a class="nav-link <%= locals.activeTab === 'templates' ? 'active' : '' %>" href="/templates">
+          <i class="bi bi-file-earmark-text"></i>
+          <span>改写模板</span>
+        </a>
+      </li>
+      <li class="nav-item">
         <a class="nav-link <%= locals.activeTab === 'jobs' ? 'active' : '' %>" href="/jobs">
           <i class="bi bi-list-check"></i>
           <span>任务日志</span>

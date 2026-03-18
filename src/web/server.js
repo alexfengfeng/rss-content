@@ -45,6 +45,17 @@ function normalizeSourcePayload(body) {
   };
 }
 
+function normalizeTemplatePayload(body) {
+  return {
+    name: String(body.name || '').trim(),
+    description: String(body.description || '').trim(),
+    system_prompt: String(body.system_prompt || '').trim(),
+    user_prompt: String(body.user_prompt || '').trim(),
+    is_enabled: body.is_enabled === 'on' || body.is_enabled === true,
+    is_default: body.is_default === 'on' || body.is_default === true
+  };
+}
+
 function parseJobRun(jobRun) {
   if (!jobRun) return null;
 
@@ -63,6 +74,14 @@ function parseJobRun(jobRun) {
   };
 }
 
+async function rewriteNewsBySource(news, options = {}) {
+  if (news.source_type === 'github') {
+    return rewriteGithubProject(news);
+  }
+
+  return rewriteNews(news.title, news.description, news.link, options);
+}
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(methodOverride('_method'));
@@ -75,21 +94,12 @@ app.use(express.static(publicPath));
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
-
 app.locals.appName = 'News to WeChat';
 app.locals.version = '1.0.0';
 app.locals.isHtmlContent = isHtmlContent;
 
 app.use(expressLayouts);
 app.set('layout', 'layout');
-
-async function rewriteNewsBySource(news) {
-  if (news.source_type === 'github') {
-    return rewriteGithubProject(news);
-  }
-
-  return rewriteNews(news.title, news.description, news.link);
-}
 
 app.get('/', async (req, res) => {
   try {
@@ -130,13 +140,11 @@ app.get('/news', async (req, res) => {
       db.getAllSources()
     ]);
 
-    const totalPages = Math.max(Math.ceil(total / limit), 1);
-
     res.render('news', {
       news,
       status,
       page,
-      totalPages,
+      totalPages: Math.max(Math.ceil(total / limit), 1),
       total,
       sourceId,
       search,
@@ -151,13 +159,20 @@ app.get('/news', async (req, res) => {
 
 app.get('/news/:id', async (req, res) => {
   try {
-    const news = await db.getNewsById(req.params.id);
+    const [news, templates] = await Promise.all([
+      db.getNewsById(req.params.id),
+      db.getEnabledRewriteTemplates()
+    ]);
 
     if (!news) {
       return res.status(404).render('error', { error: '新闻不存在' });
     }
 
-    res.render('news-detail', { news, activeTab: 'news' });
+    res.render('news-detail', {
+      news,
+      templates,
+      activeTab: 'news'
+    });
   } catch (error) {
     res.status(500).render('error', { error: error.message });
   }
@@ -165,13 +180,20 @@ app.get('/news/:id', async (req, res) => {
 
 app.get('/news/:id/edit', async (req, res) => {
   try {
-    const news = await db.getNewsById(req.params.id);
+    const [news, templates] = await Promise.all([
+      db.getNewsById(req.params.id),
+      db.getEnabledRewriteTemplates()
+    ]);
 
     if (!news) {
       return res.status(404).render('error', { error: '新闻不存在' });
     }
 
-    res.render('news-edit', { news, activeTab: 'news' });
+    res.render('news-edit', {
+      news,
+      templates,
+      activeTab: 'news'
+    });
   } catch (error) {
     res.status(500).render('error', { error: error.message });
   }
@@ -194,12 +216,38 @@ app.get('/sources/new', (req, res) => {
 app.get('/sources/:id/edit', async (req, res) => {
   try {
     const source = await db.getSourceById(req.params.id);
-
     if (!source) {
       return res.status(404).render('error', { error: '信源不存在' });
     }
 
     res.render('source-form', { source, activeTab: 'sources' });
+  } catch (error) {
+    res.status(500).render('error', { error: error.message });
+  }
+});
+
+app.get('/templates', async (req, res) => {
+  try {
+    const templates = await db.getAllRewriteTemplates();
+    res.render('templates', { templates, activeTab: 'templates' });
+  } catch (error) {
+    logger.error('改写模板加载失败:', error.message);
+    res.status(500).render('error', { error: error.message });
+  }
+});
+
+app.get('/templates/new', (req, res) => {
+  res.render('template-form', { template: null, activeTab: 'templates' });
+});
+
+app.get('/templates/:id/edit', async (req, res) => {
+  try {
+    const template = await db.getRewriteTemplateById(req.params.id);
+    if (!template) {
+      return res.status(404).render('error', { error: '改写模板不存在' });
+    }
+
+    res.render('template-form', { template, activeTab: 'templates' });
   } catch (error) {
     res.status(500).render('error', { error: error.message });
   }
@@ -240,15 +288,11 @@ app.get('/jobs', async (req, res) => {
 app.get('/jobs/:id', async (req, res) => {
   try {
     const jobRun = parseJobRun(await db.getJobRunById(req.params.id));
-
     if (!jobRun) {
       return res.status(404).render('error', { error: '任务日志不存在' });
     }
 
-    res.render('job-detail', {
-      jobRun,
-      activeTab: 'jobs'
-    });
+    res.render('job-detail', { jobRun, activeTab: 'jobs' });
   } catch (error) {
     logger.error('任务日志详情加载失败:', error.message);
     res.status(500).render('error', { error: error.message });
@@ -271,7 +315,6 @@ app.post('/api/fetch', async (req, res) => {
 
     if (sourceId) {
       const source = await db.getSourceById(sourceId);
-
       if (!source) {
         return res.status(404).json({ success: false, error: '信源不存在' });
       }
@@ -291,16 +334,15 @@ app.post('/api/fetch', async (req, res) => {
 
 app.post('/api/rewrite', async (req, res) => {
   try {
-    const { newsId } = req.body;
+    const { newsId, templateId } = req.body;
 
     if (newsId) {
       const news = await db.getNewsById(newsId);
-
       if (!news) {
         return res.status(404).json({ success: false, error: '新闻不存在' });
       }
 
-      const result = await rewriteNewsBySource(news);
+      const result = await rewriteNewsBySource(news, { templateId });
       await db.updateRewrittenNews(news.id, result.title, result.content, {
         imageUrl: result.imageUrl,
         projectMeta: result.projectMeta
@@ -309,7 +351,7 @@ app.post('/api/rewrite', async (req, res) => {
       return res.json({ success: true, data: result });
     }
 
-    const result = await runRewriteJob({ limit: 5 });
+    const result = await runRewriteJob({ limit: 5, templateId });
     res.json({ success: true, data: result.results });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -320,7 +362,6 @@ app.post('/api/publish', async (req, res) => {
   try {
     const { newsId } = req.body;
     const news = await db.getNewsById(newsId);
-
     if (!news) {
       return res.status(404).json({ success: false, error: '新闻不存在' });
     }
@@ -335,7 +376,6 @@ app.post('/api/publish', async (req, res) => {
 app.post('/api/news/:id/reset', async (req, res) => {
   try {
     const news = await db.getNewsById(req.params.id);
-
     if (!news) {
       return res.status(404).json({ success: false, error: '新闻不存在' });
     }
@@ -360,7 +400,6 @@ app.post('/api/news/reset-failed', async (req, res) => {
 app.put('/api/news/:id', async (req, res) => {
   try {
     const { title, description, rewritten_title, rewritten_content } = req.body;
-
     if (
       title === undefined &&
       description === undefined &&
@@ -408,6 +447,33 @@ app.put('/api/sources/:id', async (req, res) => {
 app.delete('/api/sources/:id', async (req, res) => {
   try {
     const result = await db.deleteSource(req.params.id);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/templates', async (req, res) => {
+  try {
+    const result = await db.addRewriteTemplate(normalizeTemplatePayload(req.body));
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.put('/api/templates/:id', async (req, res) => {
+  try {
+    const result = await db.updateRewriteTemplate(req.params.id, normalizeTemplatePayload(req.body));
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/templates/:id', async (req, res) => {
+  try {
+    const result = await db.deleteRewriteTemplate(req.params.id);
     res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

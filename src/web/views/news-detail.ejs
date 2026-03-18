@@ -18,14 +18,8 @@
       </div>
       <div class="card-body">
         <table class="table table-borderless">
-          <tr>
-            <td width="100" class="text-muted">ID</td>
-            <td>#<%= news.id %></td>
-          </tr>
-          <tr>
-            <td class="text-muted">来源</td>
-            <td><span class="badge bg-secondary"><%= news.source_name %></span></td>
-          </tr>
+          <tr><td width="110" class="text-muted">ID</td><td>#<%= news.id %></td></tr>
+          <tr><td class="text-muted">来源</td><td><span class="badge bg-secondary"><%= news.source_name %></span></td></tr>
           <tr>
             <td class="text-muted">状态</td>
             <td>
@@ -37,26 +31,10 @@
               </span>
             </td>
           </tr>
-          <tr>
-            <td class="text-muted">发布日期</td>
-            <td><%= news.pub_date || '未知' %></td>
-          </tr>
-          <tr>
-            <td class="text-muted">抓取时间</td>
-            <td><%= news.fetched_at %></td>
-          </tr>
-          <% if (news.rewritten_at) { %>
-            <tr>
-              <td class="text-muted">改写时间</td>
-              <td><%= news.rewritten_at %></td>
-            </tr>
-          <% } %>
-          <% if (news.published_at) { %>
-            <tr>
-              <td class="text-muted">发布时间</td>
-              <td><%= news.published_at %></td>
-            </tr>
-          <% } %>
+          <tr><td class="text-muted">发布时间</td><td><%= news.pub_date || '未知' %></td></tr>
+          <tr><td class="text-muted">抓取时间</td><td><%= news.fetched_at %></td></tr>
+          <% if (news.rewritten_at) { %><tr><td class="text-muted">改写时间</td><td><%= news.rewritten_at %></td></tr><% } %>
+          <% if (news.published_at) { %><tr><td class="text-muted">发布到公众号</td><td><%= news.published_at %></td></tr><% } %>
           <tr>
             <td class="text-muted">原文链接</td>
             <td>
@@ -65,12 +43,6 @@
               </a>
             </td>
           </tr>
-          <% if (news.wechat_media_id) { %>
-            <tr>
-              <td class="text-muted">Media ID</td>
-              <td><code><%= news.wechat_media_id %></code></td>
-            </tr>
-          <% } %>
         </table>
 
         <% if (news.error_message) { %>
@@ -103,18 +75,30 @@
         </h5>
       </div>
       <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label">选择改写模板</label>
+          <select id="templateId" class="form-control">
+            <option value="">默认模板</option>
+            <% (templates || []).forEach((template) => { %>
+              <option value="<%= template.id %>">
+                <%= template.name %><%= template.is_default ? '（默认）' : '' %>
+              </option>
+            <% }); %>
+          </select>
+        </div>
+
         <% if (news.status === 'pending' || news.status === 'failed') { %>
           <div class="text-center py-5">
             <i class="bi bi-magic fs-1 text-muted mb-3 d-block"></i>
             <p class="text-muted">
-              <%= news.status === 'failed' ? '当前任务失败，可先重置后重新改写。' : '此新闻尚未改写。' %>
+              <%= news.status === 'failed' ? '当前任务失败，可选择模板后重新改写。' : '此新闻尚未改写。' %>
             </p>
             <% if (news.status === 'failed') { %>
               <button class="btn btn-warning me-2" onclick="resetFailed(<%= news.id %>, event)">
                 <i class="bi bi-arrow-repeat me-2"></i>重置为待改写
               </button>
             <% } %>
-            <button class="btn btn-info text-white" onclick="rewriteNews(<%= news.id %>, event)">
+            <button class="btn btn-info text-white" onclick="rewriteArticle(<%= news.id %>, event)">
               <i class="bi bi-magic me-2"></i>立即改写
             </button>
           </div>
@@ -138,18 +122,23 @@
             <% } %>
           </div>
 
-          <% if (news.status === 'rewritten') { %>
-            <div class="d-grid gap-2 mt-4">
+          <div class="d-flex gap-2 mt-4">
+            <button class="btn btn-info text-white" onclick="rewriteArticle(<%= news.id %>, event)">
+              <i class="bi bi-arrow-repeat me-2"></i>按所选模板重新改写
+            </button>
+            <% if (news.status === 'rewritten') { %>
               <button class="btn btn-success" onclick="publishNews(<%= news.id %>, event)">
                 <i class="bi bi-send me-2"></i>发布到微信公众号
               </button>
-            </div>
-          <% } %>
+            <% } %>
+          </div>
 
           <% if (news.status === 'published') { %>
             <div class="alert alert-success mt-4">
-              <i class="bi bi-check-circle me-2"></i>
-              已发布到微信公众号
+              <i class="bi bi-check-circle me-2"></i>已发布到微信公众号
+              <% if (news.wechat_media_id) { %>
+                <div class="small text-muted mt-2">Media ID: <%= news.wechat_media_id %></div>
+              <% } %>
             </div>
           <% } %>
         <% } %>
@@ -162,23 +151,7 @@
   <a href="/news" class="btn btn-outline-secondary">
     <i class="bi bi-arrow-left me-2"></i>返回列表
   </a>
-
   <div class="ms-auto">
-    <% if (news.status === 'pending') { %>
-      <button class="btn btn-info text-white me-2" onclick="rewriteNews(<%= news.id %>, event)">
-        <i class="bi bi-magic me-2"></i>AI 改写
-      </button>
-    <% } %>
-    <% if (news.status === 'rewritten') { %>
-      <button class="btn btn-success me-2" onclick="publishNews(<%= news.id %>, event)">
-        <i class="bi bi-send me-2"></i>发布到公众号
-      </button>
-    <% } %>
-    <% if (news.status === 'failed') { %>
-      <button class="btn btn-warning me-2" onclick="resetFailed(<%= news.id %>, event)">
-        <i class="bi bi-arrow-repeat me-2"></i>重置失败
-      </button>
-    <% } %>
     <a href="/news/<%= news.id %>/edit" class="btn btn-warning me-2">
       <i class="bi bi-pencil me-2"></i>编辑
     </a>
@@ -189,7 +162,11 @@
 </div>
 
 <script>
-async function rewriteNews(newsId, clickEvent) {
+function getSelectedTemplateId() {
+  return document.getElementById('templateId')?.value || '';
+}
+
+async function rewriteArticle(newsId, clickEvent) {
   const btn = clickEvent.currentTarget;
   const originalHtml = btn.innerHTML;
   btn.innerHTML = '<i class="bi bi-arrow-clockwise spin me-2"></i>改写中...';
@@ -198,7 +175,10 @@ async function rewriteNews(newsId, clickEvent) {
   try {
     await apiFetch('/api/rewrite', {
       method: 'POST',
-      body: JSON.stringify({ newsId })
+      body: JSON.stringify({
+        newsId,
+        templateId: getSelectedTemplateId()
+      })
     });
     showToast('改写成功', 'success');
     setTimeout(() => location.reload(), 800);

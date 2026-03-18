@@ -57,12 +57,12 @@ async function withJobRun(meta, runner) {
   }
 }
 
-async function rewriteNewsBySource(news) {
+async function rewriteNewsBySource(news, options = {}) {
   if (news.source_type === 'github') {
     return rewriteGithubProject(news);
   }
 
-  return rewriteNews(news.title, news.description, news.link);
+  return rewriteNews(news.title, news.description, news.link, options);
 }
 
 async function publishSingleNews(news) {
@@ -123,7 +123,7 @@ async function runRewriteJob(options = {}) {
 
     for (const news of candidates) {
       try {
-        const result = await rewriteNewsBySource(news);
+        const result = await rewriteNewsBySource(news, options);
         await db.updateRewrittenNews(news.id, result.title, result.content, {
           imageUrl: result.imageUrl,
           projectMeta: result.projectMeta
