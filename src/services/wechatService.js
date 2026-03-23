@@ -21,6 +21,35 @@ let accessTokenCache = {
 // 默认封面 media_id 缓存（避免重复上传）
 let defaultCoverMediaId = null;
 
+async function loadImageBinary(imageUrl) {
+  if (imageUrl.startsWith('data:image')) {
+    const matches = imageUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+    if (!matches) {
+      throw new Error('无效的 data URI 格式');
+    }
+
+    return {
+      buffer: Buffer.from(matches[2], 'base64'),
+      filename: `material.${matches[1]}`
+    };
+  }
+
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    const resp = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 30000 });
+    const pathname = new URL(imageUrl).pathname;
+    const ext = path.extname(pathname) || '.jpg';
+    return {
+      buffer: Buffer.from(resp.data),
+      filename: `material${ext}`
+    };
+  }
+
+  return {
+    buffer: fs.readFileSync(imageUrl),
+    filename: path.basename(imageUrl)
+  };
+}
+
 // 检查配置
 function checkConfig() {
   if (!WECHAT_APPID) {
@@ -78,31 +107,11 @@ async function getAccessToken() {
  */
 async function uploadPermanentMaterial(imageUrl, type = 'image') {
   const accessToken = await getAccessToken();
-  
-  let imageData;
-  let filename;
-
-  // 处理 data URI
-  if (imageUrl.startsWith('data:image')) {
-    const matches = imageUrl.match(/^data:image\/(\w+);base64,(.+)$/);
-    if (matches) {
-      imageData = Buffer.from(matches[2], 'base64');
-      filename = `material.${matches[1]}`;
-    } else {
-      throw new Error('无效的 data URI 格式');
-    }
-  } else if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-    const resp = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-    imageData = resp.data;
-    filename = 'material.jpg';
-  } else {
-    imageData = fs.readFileSync(imageUrl);
-    filename = path.basename(imageUrl);
-  }
+  const { buffer, filename } = await loadImageBinary(imageUrl);
 
   const FormData = require('form-data');
   const form = new FormData();
-  form.append('media', Buffer.from(imageData), { filename });
+  form.append('media', buffer, { filename });
 
   const resp = await axios.post(
     `${API_BASE}/material/add_material?access_token=${accessToken}&type=${type}`,
@@ -123,6 +132,68 @@ async function uploadPermanentMaterial(imageUrl, type = 'image') {
   return data.media_id;
 }
 
+async function uploadArticleImage(imageUrl, accessToken) {
+  const token = accessToken || await getAccessToken();
+  const { buffer, filename } = await loadImageBinary(imageUrl);
+
+  const FormData = require('form-data');
+  const form = new FormData();
+  form.append('media', buffer, { filename });
+
+  const resp = await axios.post(
+    `${API_BASE}/media/uploadimg?access_token=${token}`,
+    form,
+    {
+      headers: form.getHeaders(),
+      timeout: 30000
+    }
+  );
+
+  const data = resp.data;
+  if (data.errcode) {
+    throw new Error(`上传正文图片失败：${data.errmsg}`);
+  }
+
+  if (!data.url) {
+    throw new Error('上传正文图片失败：微信未返回可用 URL');
+  }
+
+  logger.info(`正文图片上传成功：${data.url}`);
+  return data.url;
+}
+
+async function localizeInlineImages(html, accessToken) {
+  const content = String(html || '');
+  const imageMatches = [...content.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi)];
+
+  if (imageMatches.length === 0) {
+    return content;
+  }
+
+  const replacements = new Map();
+
+  for (const match of imageMatches) {
+    const src = match[1];
+    if (!src || replacements.has(src) || /mmbiz\.qpic\.cn|mp\.weixin\.qq\.com/i.test(src)) {
+      continue;
+    }
+
+    try {
+      const uploadedUrl = await uploadArticleImage(src, accessToken);
+      replacements.set(src, uploadedUrl);
+    } catch (error) {
+      logger.warn(`正文图片上传失败，保留原图链接: ${src} - ${error.message}`);
+    }
+  }
+
+  let localized = content;
+  for (const [src, uploadedUrl] of replacements.entries()) {
+    localized = localized.split(src).join(uploadedUrl);
+  }
+
+  return localized;
+}
+
 /**
  * 发布文章到公众号草稿箱
  * 注意：草稿箱接口仅对认证服务号开放，订阅号无法使用
@@ -133,11 +204,14 @@ async function publishArticle({
   summary = '', 
   author = '', 
   coverImage = '',
+  coverPreset = 'default',
+  coverSubtitle = 'GitHub 热门项目',
+  forceGenerateCover = false,
   toSend = false 
 }) {
   try {
     const accessToken = await getAccessToken();
-    const normalizedContent = normalizePublishBody(content);
+    const normalizedContent = await localizeInlineImages(normalizePublishBody(content), accessToken);
     const normalizedSummary = summary
       ? buildSummaryText(summary, 120)
       : buildSummaryText(content, 120);
@@ -148,7 +222,11 @@ async function publishArticle({
     
     try {
       // 1. 处理封面图片：检测格式，WebP 转 JPG，无封面则生成标题封面
-      const processedCover = await processCoverImage(coverImage, title, 'GitHub 热门项目');
+      const processedCover = await processCoverImage(coverImage, title, {
+        preset: coverPreset,
+        subtitle: coverSubtitle,
+        forceGenerate: forceGenerateCover
+      });
       
       // 2. 上传处理后的封面
       thumbMediaId = await uploadPermanentMaterial(processedCover, 'image');

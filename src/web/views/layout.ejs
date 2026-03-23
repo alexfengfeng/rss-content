@@ -40,6 +40,12 @@
         </a>
       </li>
       <li class="nav-item">
+        <a class="nav-link <%= locals.activeTab === 'publishTemplates' ? 'active' : '' %>" href="/publish-templates">
+          <i class="bi bi-palette"></i>
+          <span>发布样式模板</span>
+        </a>
+      </li>
+      <li class="nav-item">
         <a class="nav-link <%= locals.activeTab === 'jobs' ? 'active' : '' %>" href="/jobs">
           <i class="bi bi-list-check"></i>
           <span>任务日志</span>

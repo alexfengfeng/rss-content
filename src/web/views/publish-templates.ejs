@@ -1,0 +1,90 @@
+<div class="mb-4">
+  <h1 class="h3 mb-2">发布样式模板</h1>
+  <p class="text-muted">管理发布阶段使用的正文样式、封面风格和适用范围。</p>
+</div>
+
+<div class="action-bar">
+  <span class="text-muted">样式模板管理</span>
+  <a href="/publish-templates/new" class="btn btn-primary ms-auto">
+    <i class="bi bi-plus-lg me-2"></i>新建样式模板
+  </a>
+</div>
+
+<div class="content-card">
+  <div class="card-header">
+    <h5 class="card-title">
+      <i class="bi bi-palette text-primary me-2"></i>样式模板列表
+    </h5>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>名称</th>
+            <th>样式键</th>
+            <th>适用范围</th>
+            <th>说明</th>
+            <th>状态</th>
+            <th>默认</th>
+            <th>更新时间</th>
+            <th width="180">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (!templates.length) { %>
+            <tr>
+              <td colspan="8" class="text-center text-muted py-5">暂无发布样式模板</td>
+            </tr>
+          <% } else { %>
+            <% templates.forEach((template) => { %>
+              <tr>
+                <td><strong><%= template.name %></strong></td>
+                <td><code><%= template.style_key %></code></td>
+                <td><%= template.target_type === 'github' ? 'GitHub 开源项目' : '全部新闻' %></td>
+                <td><%= template.description || '-' %></td>
+                <td>
+                  <span class="status-badge status-<%= template.is_enabled ? 'published' : 'failed' %>">
+                    <%= template.is_enabled ? '启用' : '禁用' %>
+                  </span>
+                </td>
+                <td>
+                  <% if (template.is_default) { %>
+                    <span class="badge bg-success">默认</span>
+                  <% } else { %>
+                    <span class="text-muted">-</span>
+                  <% } %>
+                </td>
+                <td class="text-muted"><%= template.updated_at || '-' %></td>
+                <td>
+                  <a href="/publish-templates/<%= template.id %>/edit" class="btn-action text-warning" title="编辑">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+                  <% if (!template.is_default) { %>
+                    <button class="btn-action text-danger" onclick="deletePublishTemplate(<%= template.id %>)" title="删除">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  <% } %>
+                </td>
+              </tr>
+            <% }); %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+async function deletePublishTemplate(templateId) {
+  if (!confirm('确定要删除这个发布样式模板吗？')) return;
+
+  try {
+    await apiFetch(`/api/publish-templates/${templateId}`, { method: 'DELETE' });
+    showToast('发布样式模板已删除', 'success');
+    setTimeout(() => location.reload(), 800);
+  } catch (error) {
+    console.error(error);
+  }
+}
+</script>

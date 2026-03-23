@@ -1,3 +1,19 @@
+const THEME = {
+  bodyText: '#39322c',
+  headingText: '#221c17',
+  mutedText: '#7a6958',
+  link: '#8a6241',
+  accent: '#a87b52',
+  accentSoft: '#f5ede4',
+  quoteBg: '#fbf6f0',
+  surface: '#fffdf9',
+  surfaceStrong: '#fffefc',
+  border: '#e6d8c8',
+  divider: '#d7c2ab',
+  codeBg: '#f7f1ea',
+  shadow: '0 4px 14px rgba(78, 56, 33, 0.05)'
+};
+
 function escapeHtml(value = '') {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -31,7 +47,10 @@ function renderInlineMarkdown(text = '') {
   return escapeHtml(text)
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/\[(.+?)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" style="color:#1769aa;text-decoration:none;">$1</a>');
+    .replace(
+      /\[(.+?)\]\((https?:\/\/[^)]+)\)/g,
+      `<a href="$2" style="color:${THEME.link};text-decoration:none;border-bottom:1px solid ${THEME.divider};padding-bottom:1px;">$1</a>`
+    );
 }
 
 function normalizePlainText(content = '') {
@@ -41,6 +60,10 @@ function normalizePlainText(content = '') {
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+function paragraphStyle() {
+  return `margin:10px 0;line-height:1.82;color:${THEME.bodyText};font-size:15px;text-align:justify;letter-spacing:0.15px;word-break:break-word;overflow-wrap:anywhere;`;
 }
 
 function renderParagraph(block = '') {
@@ -54,7 +77,38 @@ function renderParagraph(block = '') {
     return '';
   }
 
-  return `<p style="margin:10px 0;line-height:1.75;color:#374151;font-size:15px;">${renderInlineMarkdown(text)}</p>`;
+  return `<p style="${paragraphStyle()}">${renderInlineMarkdown(text)}</p>`;
+}
+
+function renderHeading(text = '') {
+  return [
+    `<section style="margin:22px 0 10px;">`,
+    `<div style="width:28px;height:2px;background:${THEME.accent};border-radius:999px;margin-bottom:12px;"></div>`,
+    `<h3 style="margin:0;font-size:20px;line-height:1.42;color:${THEME.headingText};font-weight:700;letter-spacing:0.25px;font-family:Georgia,'Times New Roman','Songti SC','STSong',serif;word-break:break-word;overflow-wrap:anywhere;">${renderInlineMarkdown(text)}</h3>`,
+    `</section>`
+  ].join('');
+}
+
+function renderQuote(text = '') {
+  return [
+    `<blockquote style="margin:16px 0;padding:14px 16px;border-left:3px solid ${THEME.accent};background:${THEME.quoteBg};`,
+    `border-radius:0 12px 12px 0;color:${THEME.bodyText};box-shadow:inset 0 0 0 1px rgba(168,123,82,0.08);">`,
+    `<p style="margin:0;line-height:1.78;font-size:15px;">${renderInlineMarkdown(text)}</p>`,
+    `</blockquote>`
+  ].join('');
+}
+
+function renderList(block = '', ordered = false) {
+  const tag = ordered ? 'ol' : 'ul';
+  const items = block
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(ordered ? /^\d+\.\s+/ : /^[-*]\s+/, ''))
+    .map((line) => `<li style="margin:6px 0;line-height:1.78;color:${THEME.bodyText};word-break:break-word;overflow-wrap:anywhere;">${renderInlineMarkdown(line)}</li>`)
+    .join('');
+
+  return `<${tag} style="margin:10px 0;padding-left:24px;color:${THEME.bodyText};font-size:15px;word-break:break-word;overflow-wrap:anywhere;">${items}</${tag}>`;
 }
 
 function markdownishToHtml(content = '') {
@@ -66,50 +120,38 @@ function markdownishToHtml(content = '') {
     .map((block) => block.trim())
     .filter(Boolean);
 
-  return blocks.map((block) => {
-    if (block === '---') {
-      return '<hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;">';
-    }
+  return blocks
+    .map((block) => {
+      if (block === '---') {
+        return `<hr style="border:none;border-top:1px solid ${THEME.divider};margin:22px 0;">`;
+      }
 
-    if (/^#{1,3}\s+/.test(block)) {
-      const heading = block.replace(/^#{1,3}\s+/, '').trim();
-      return `<h3 style="margin:18px 0 10px;font-size:18px;line-height:1.5;color:#1f2937;">${renderInlineMarkdown(heading)}</h3>`;
-    }
+      if (/^#{1,3}\s+/.test(block)) {
+        return renderHeading(block.replace(/^#{1,3}\s+/, '').trim());
+      }
 
-    if (/^>\s+/.test(block)) {
-      const quote = block
-        .split('\n')
-        .map((line) => line.replace(/^>\s?/, '').trim())
-        .filter(Boolean)
-        .join(' ');
+      if (/^>\s+/.test(block)) {
+        const quote = block
+          .split('\n')
+          .map((line) => line.replace(/^>\s?/, '').trim())
+          .filter(Boolean)
+          .join(' ');
 
-      return `<blockquote style="margin:14px 0;padding:10px 14px;border-left:4px solid #cbd5e1;background:#f8fafc;color:#475569;">${renderInlineMarkdown(quote)}</blockquote>`;
-    }
+        return renderQuote(quote);
+      }
 
-    if (block.split('\n').every((line) => /^[-*]\s+/.test(line.trim()))) {
-      const items = block
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => `<li style="margin:6px 0;line-height:1.75;">${renderInlineMarkdown(line.replace(/^[-*]\s+/, ''))}</li>`)
-        .join('');
+      if (block.split('\n').every((line) => /^[-*]\s+/.test(line.trim()))) {
+        return renderList(block, false);
+      }
 
-      return `<ul style="margin:10px 0;padding-left:22px;color:#374151;">${items}</ul>`;
-    }
+      if (block.split('\n').every((line) => /^\d+\.\s+/.test(line.trim()))) {
+        return renderList(block, true);
+      }
 
-    if (block.split('\n').every((line) => /^\d+\.\s+/.test(line.trim()))) {
-      const items = block
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => `<li style="margin:6px 0;line-height:1.75;">${renderInlineMarkdown(line.replace(/^\d+\.\s+/, ''))}</li>`)
-        .join('');
-
-      return `<ol style="margin:10px 0;padding-left:22px;color:#374151;">${items}</ol>`;
-    }
-
-    return renderParagraph(block);
-  }).filter(Boolean).join('\n');
+      return renderParagraph(block);
+    })
+    .filter(Boolean)
+    .join('\n');
 }
 
 function normalizeHtmlSpacing(html = '') {
@@ -125,14 +167,20 @@ function normalizeHtmlSpacing(html = '') {
     const compactStyle = style
       .replace(/margin\s*:[^;]+;?/gi, '')
       .replace(/line-height\s*:[^;]+;?/gi, '')
+      .replace(/font-size\s*:[^;]+;?/gi, '')
+      .replace(/color\s*:[^;]+;?/gi, '')
       .trim();
-    const nextStyle = `${compactStyle ? `${compactStyle};` : ''}margin:10px 0;line-height:1.75;`;
+    const nextStyle = `${compactStyle ? `${compactStyle};` : ''}${paragraphStyle()}`;
     return `<p${before}style=${quote}${nextStyle}${quote}${after}>`;
   });
 
-  out = out.replace(/<p(?![^>]*style=)([^>]*)>/gi, '<p$1 style="margin:10px 0;line-height:1.75;color:#374151;font-size:15px;">');
-  out = out.replace(/<li(?![^>]*style=)([^>]*)>/gi, '<li$1 style="margin:6px 0;line-height:1.75;">');
-  out = out.replace(/<h([1-6])(?![^>]*style=)([^>]*)>/gi, '<h$1$2 style="margin:18px 0 10px;line-height:1.5;color:#1f2937;">');
+  out = out.replace(/<p(?![^>]*style=)([^>]*)>/gi, `<p$1 style="${paragraphStyle()}">`);
+  out = out.replace(/<li(?![^>]*style=)([^>]*)>/gi, `<li$1 style="margin:6px 0;line-height:1.78;color:${THEME.bodyText};word-break:break-word;overflow-wrap:anywhere;">`);
+  out = out.replace(/<h([1-6])(?![^>]*style=)([^>]*)>/gi, `<h$1$2 style="margin:22px 0 10px;line-height:1.42;color:${THEME.headingText};font-weight:700;font-family:Georgia,'Times New Roman','Songti SC','STSong',serif;word-break:break-word;overflow-wrap:anywhere;">`);
+  out = out.replace(/<blockquote(?![^>]*style=)([^>]*)>/gi, `<blockquote$1 style="margin:16px 0;padding:14px 16px;border-left:3px solid ${THEME.accent};background:${THEME.quoteBg};border-radius:0 12px 12px 0;color:${THEME.bodyText};word-break:break-word;overflow-wrap:anywhere;">`);
+  out = out.replace(/<a(?![^>]*style=)([^>]*)>/gi, `<a$1 style="color:${THEME.link};text-decoration:none;border-bottom:1px solid ${THEME.divider};padding-bottom:1px;word-break:break-all;">`);
+  out = out.replace(/<td(?![^>]*style=)([^>]*)>/gi, `<td$1 style="word-break:break-word;overflow-wrap:anywhere;vertical-align:top;">`);
+  out = out.replace(/<th(?![^>]*style=)([^>]*)>/gi, `<th$1 style="word-break:break-word;overflow-wrap:anywhere;vertical-align:top;">`);
 
   return out;
 }
@@ -142,39 +190,71 @@ function makeMobileFriendlyHtml(html = '') {
 
   out = out.replace(/<img\b([^>]*)>/gi, (match, attrs) => {
     if (/style\s*=/.test(attrs)) {
-      return `<img${attrs.replace(/style\s*=\s*(["'])(.*?)\1/i, (styleMatch, quote, style) => `style=${quote}${style};max-width:100%;height:auto;display:block;margin:12px auto;${quote}`)}>`;
+      return `<img${attrs.replace(/style\s*=\s*(["'])(.*?)\1/i, (styleMatch, quote, style) => `style=${quote}${style};max-width:100%;height:auto;display:block;margin:18px auto;border-radius:16px;box-shadow:${THEME.shadow};${quote}`)}>`;
     }
-    return `<img${attrs} style="max-width:100%;height:auto;display:block;margin:12px auto;">`;
+    return `<img${attrs} style="max-width:100%;height:auto;display:block;margin:18px auto;border-radius:16px;box-shadow:${THEME.shadow};">`;
   });
 
-  out = out.replace(/<pre\b/gi, '<pre style="overflow-x:auto;white-space:pre-wrap;word-break:break-word;background:#f8fafc;padding:12px;border-radius:8px;"');
+  out = out.replace(/<pre\b/gi, `<pre style="overflow-x:auto;white-space:pre-wrap;word-break:break-word;background:${THEME.codeBg};padding:14px 16px;border-radius:14px;border:1px solid ${THEME.border};color:${THEME.bodyText};"`);
   out = out.replace(/<table\b([^>]*)>/gi, (match, attrs) => {
     if (/style\s*=/.test(attrs)) {
-      return `<table${attrs.replace(/style\s*=\s*(["'])(.*?)\1/i, (styleMatch, quote, style) => ` style=${quote}${style};display:block;overflow-x:auto;max-width:100%;${quote}`)}>`;
+      return `<table${attrs.replace(/style\s*=\s*(["'])(.*?)\1/i, (styleMatch, quote, style) => ` style=${quote}${style};display:block;overflow-x:auto;max-width:100%;border-collapse:collapse;table-layout:fixed;${quote}`)}>`;
     }
-    return `<table${attrs} style="display:block;overflow-x:auto;max-width:100%;">`;
+    return `<table${attrs} style="display:block;overflow-x:auto;max-width:100%;border-collapse:collapse;table-layout:fixed;">`;
   });
 
-  return `<div style="font-size:15px;line-height:1.75;color:#1f2937;word-break:break-word;overflow-wrap:anywhere;max-width:100%;">${out}</div>`;
+  return [
+    `<section data-rss-content-template="business-light" style="max-width:100%;padding:28px 20px 22px;background:${THEME.surfaceStrong};`,
+    `border:1px solid ${THEME.border};border-radius:18px;box-shadow:${THEME.shadow};word-break:break-word;overflow-wrap:anywhere;">`,
+    `<div style="display:flex;align-items:center;gap:10px;margin:0 0 18px;">`,
+    `<div style="width:34px;height:2px;background:${THEME.accent};border-radius:999px;"></div>`,
+    `<span style="font-size:11px;letter-spacing:1.4px;color:${THEME.mutedText};text-transform:uppercase;">Feature Brief</span>`,
+    `</div>`,
+    `<div style="font-size:15px;line-height:1.88;color:${THEME.bodyText};max-width:100%;">${out}</div>`,
+    `</section>`
+  ].join('');
 }
 
 function buildFooterHtml(link, sourceName) {
+  const rows = [];
+
+  if (link) {
+    rows.push(`<p style="margin:0 0 8px;color:${THEME.mutedText};font-size:13px;line-height:1.75;">原文链接：<a href="${escapeHtml(link)}" style="color:${THEME.link};text-decoration:none;border-bottom:1px solid ${THEME.divider};padding-bottom:1px;">点击查看</a></p>`);
+  }
+
+  if (sourceName) {
+    rows.push(`<p style="margin:0;color:${THEME.mutedText};font-size:13px;line-height:1.75;">文章来源：${escapeHtml(sourceName)}</p>`);
+  }
+
+  if (rows.length === 0) {
+    return '';
+  }
+
   return [
-    '<hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;">',
-    `<p style="margin:8px 0;color:#6b7280;font-size:14px;">原文链接：<a href="${escapeHtml(link)}" style="color:#1769aa;text-decoration:none;">点击查看</a></p>`,
-    `<p style="margin:8px 0;color:#6b7280;font-size:14px;">文章来源：${escapeHtml(sourceName || '')}</p>`
+    `<section style="margin-top:18px;padding:14px 16px 12px;background:${THEME.surface};border:1px solid ${THEME.border};border-radius:14px;">`,
+    rows.join(''),
+    `</section>`
   ].join('');
 }
 
 function buildPublishContent(content, { link, sourceName } = {}) {
-  const body = isHtmlContent(content) ? normalizeHtmlSpacing(String(content).trim()) : markdownishToHtml(content);
+  const trimmed = String(content || '').trim();
+  const body = /data-rss-content-template=/i.test(trimmed)
+    ? trimmed
+    : (isHtmlContent(content) ? normalizeHtmlSpacing(trimmed) : markdownishToHtml(content));
   const mobileBody = makeMobileFriendlyHtml(body);
-  const footer = link ? buildFooterHtml(link, sourceName) : '';
+  const footer = buildFooterHtml(link, sourceName);
+  if (/data-rss-content-template=/i.test(trimmed)) {
+    return `${body}${footer}`.trim();
+  }
   return `${mobileBody}${footer}`.trim();
 }
 
 function normalizePublishBody(content = '') {
   if (!content) return '';
+  if (/data-rss-content-template=/i.test(content)) {
+    return String(content).trim();
+  }
   return buildPublishContent(content);
 }
 
@@ -182,10 +262,10 @@ function buildSummaryText(content, maxLength = 120) {
   const text = isHtmlContent(content)
     ? stripHtml(content)
     : decodeHtml(String(content))
-      .replace(/\[(.+?)\]\((https?:\/\/[^)]+)\)/g, '$1')
-      .replace(/[*#>-]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
+        .replace(/\[(.+?)\]\((https?:\/\/[^)]+)\)/g, '$1')
+        .replace(/[*#>-]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 
   return text.slice(0, maxLength);
 }

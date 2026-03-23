@@ -14,6 +14,14 @@ const logger = require('../utils/logger');
 
 const app = express();
 const PORT = process.env.WEB_PORT || 3000;
+const PUBLISH_TEMPLATE_STYLE_OPTIONS = [
+  { value: 'default_article', label: '默认图文模板' },
+  { value: 'open_source_infoq', label: 'InfoQ 风开源项目模板' }
+];
+const PUBLISH_TEMPLATE_TARGET_OPTIONS = [
+  { value: 'all', label: '全部新闻' },
+  { value: 'github', label: 'GitHub 开源项目' }
+];
 
 function parseDelimitedField(value) {
   if (Array.isArray(value)) {
@@ -56,6 +64,20 @@ function normalizeTemplatePayload(body) {
   };
 }
 
+function normalizePublishTemplatePayload(body) {
+  const styleKey = String(body.style_key || 'default_article').trim() || 'default_article';
+  const targetType = String(body.target_type || 'all').trim() || 'all';
+
+  return {
+    name: String(body.name || '').trim(),
+    description: String(body.description || '').trim(),
+    style_key: styleKey,
+    target_type: targetType === 'github' ? 'github' : 'all',
+    is_enabled: body.is_enabled === 'on' || body.is_enabled === true,
+    is_default: body.is_default === 'on' || body.is_default === true
+  };
+}
+
 function parseJobRun(jobRun) {
   if (!jobRun) return null;
 
@@ -76,7 +98,17 @@ function parseJobRun(jobRun) {
 
 async function rewriteNewsBySource(news, options = {}) {
   if (news.source_type === 'github' && /github\.com/i.test(news.link || '')) {
-    return rewriteGithubProject(news);
+    let publishTemplate = null;
+
+    if (options.publishTemplateId) {
+      publishTemplate = await db.getPublishTemplateById(options.publishTemplateId);
+    } else if (news.publish_template_id) {
+      publishTemplate = await db.getPublishTemplateById(news.publish_template_id);
+    } else {
+      publishTemplate = await db.getDefaultPublishTemplate('github');
+    }
+
+    return rewriteGithubProject(news, { publishTemplate });
   }
 
   const nextOptions = { ...options };
@@ -170,18 +202,22 @@ app.get('/news', async (req, res) => {
 
 app.get('/news/:id', async (req, res) => {
   try {
-    const [news, templates] = await Promise.all([
-      db.getNewsById(req.params.id),
-      db.getEnabledRewriteTemplates()
-    ]);
+    const news = await db.getNewsById(req.params.id);
 
     if (!news) {
       return res.status(404).render('error', { error: '新闻不存在' });
     }
 
+    const targetType = news.source_type === 'github' || /github\.com/i.test(news.link || '') ? 'github' : 'all';
+    const [templates, publishTemplates] = await Promise.all([
+      db.getEnabledRewriteTemplates(),
+      db.getEnabledPublishTemplates(targetType)
+    ]);
+
     res.render('news-detail', {
       news,
       templates,
+      publishTemplates,
       activeTab: 'news'
     });
   } catch (error) {
@@ -259,6 +295,43 @@ app.get('/templates/:id/edit', async (req, res) => {
     }
 
     res.render('template-form', { template, activeTab: 'templates' });
+  } catch (error) {
+    res.status(500).render('error', { error: error.message });
+  }
+});
+
+app.get('/publish-templates', async (req, res) => {
+  try {
+    const templates = await db.getAllPublishTemplates();
+    res.render('publish-templates', { templates, activeTab: 'publishTemplates' });
+  } catch (error) {
+    logger.error('鍙戝竷鏍峰紡妯℃澘鍔犺浇澶辫触:', error.message);
+    res.status(500).render('error', { error: error.message });
+  }
+});
+
+app.get('/publish-templates/new', (req, res) => {
+  res.render('publish-template-form', {
+    template: null,
+    styleOptions: PUBLISH_TEMPLATE_STYLE_OPTIONS,
+    targetTypeOptions: PUBLISH_TEMPLATE_TARGET_OPTIONS,
+    activeTab: 'publishTemplates'
+  });
+});
+
+app.get('/publish-templates/:id/edit', async (req, res) => {
+  try {
+    const template = await db.getPublishTemplateById(req.params.id);
+    if (!template) {
+      return res.status(404).render('error', { error: '发布样式模板不存在' });
+    }
+
+    res.render('publish-template-form', {
+      template,
+      styleOptions: PUBLISH_TEMPLATE_STYLE_OPTIONS,
+      targetTypeOptions: PUBLISH_TEMPLATE_TARGET_OPTIONS,
+      activeTab: 'publishTemplates'
+    });
   } catch (error) {
     res.status(500).render('error', { error: error.message });
   }
@@ -345,7 +418,7 @@ app.post('/api/fetch', async (req, res) => {
 
 app.post('/api/rewrite', async (req, res) => {
   try {
-    const { newsId, templateId } = req.body;
+    const { newsId, templateId, publishTemplateId } = req.body;
 
     if (newsId) {
       const news = await db.getNewsById(newsId);
@@ -353,16 +426,17 @@ app.post('/api/rewrite', async (req, res) => {
         return res.status(404).json({ success: false, error: '新闻不存在' });
       }
 
-      const result = await rewriteNewsBySource(news, { templateId });
+      const result = await rewriteNewsBySource(news, { templateId, publishTemplateId });
       await db.updateRewrittenNews(news.id, result.title, result.content, {
         imageUrl: result.imageUrl,
-        projectMeta: result.projectMeta
+        projectMeta: result.projectMeta,
+        publishTemplateId: result.publishTemplateId
       });
 
       return res.json({ success: true, data: result });
     }
 
-    const result = await runRewriteJob({ limit: 5, templateId });
+    const result = await runRewriteJob({ limit: 5, templateId, publishTemplateId });
     res.json({ success: true, data: result.results });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -371,13 +445,13 @@ app.post('/api/rewrite', async (req, res) => {
 
 app.post('/api/publish', async (req, res) => {
   try {
-    const { newsId } = req.body;
+    const { newsId, publishTemplateId } = req.body;
     const news = await db.getNewsById(newsId);
     if (!news) {
       return res.status(404).json({ success: false, error: '新闻不存在' });
     }
 
-    const result = await publishSingleNews(news);
+    const result = await publishSingleNews(news, { publishTemplateId });
     res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -485,6 +559,33 @@ app.put('/api/templates/:id', async (req, res) => {
 app.delete('/api/templates/:id', async (req, res) => {
   try {
     const result = await db.deleteRewriteTemplate(req.params.id);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/publish-templates', async (req, res) => {
+  try {
+    const result = await db.addPublishTemplate(normalizePublishTemplatePayload(req.body));
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.put('/api/publish-templates/:id', async (req, res) => {
+  try {
+    const result = await db.updatePublishTemplate(req.params.id, normalizePublishTemplatePayload(req.body));
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/publish-templates/:id', async (req, res) => {
+  try {
+    const result = await db.deletePublishTemplate(req.params.id);
     res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

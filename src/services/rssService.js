@@ -5,8 +5,8 @@ const logger = require('../utils/logger');
 
 const parser = new Parser({
   customFields: {
-    item: ['description', 'content', 'content:encoded', 'summary'],
-  },
+    item: ['description', 'content', 'content:encoded', 'summary']
+  }
 });
 
 const RSSHUB_BASE = process.env.RSSHUB_URL || 'http://localhost:1200';
@@ -45,9 +45,9 @@ function buildSourceUrl(source) {
   return appendQueryParam(rsshubUrl, 'limit', process.env.FETCH_LIMIT);
 }
 
-// HTML 标签清理
 function stripHtml(html) {
   if (!html) return '';
+
   return html
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ')
@@ -59,14 +59,12 @@ function stripHtml(html) {
     .trim();
 }
 
-// 检查黑名单
 function containsBlacklisted(text, blacklist) {
   if (!text || !blacklist || blacklist.length === 0) return false;
   const lowerText = text.toLowerCase();
   return blacklist.some((kw) => lowerText.includes(kw.toLowerCase()));
 }
 
-// 检查正向关键词
 function passesKeywords(text, keywords) {
   if (!keywords || keywords.length === 0) return true;
   if (!text) return false;
@@ -74,7 +72,6 @@ function passesKeywords(text, keywords) {
   return keywords.some((kw) => lowerText.includes(kw.toLowerCase()));
 }
 
-// 从 RSS 源获取数据
 async function fetchSource(source) {
   const url = buildSourceUrl(source);
 
@@ -83,22 +80,24 @@ async function fetchSource(source) {
   try {
     const resp = await axios.get(url, {
       headers: { 'User-Agent': 'NewsToWeChat/1.0 RSS Reader' },
-      timeout: 30000,
+      timeout: 30000
     });
-    const feed = await parser.parseString(resp.data);
+    if (source.type === 'rsshub' && resp.data && typeof resp.data === 'object') {
+      return resp.data.item || resp.data.items || [];
+    }
+
+    const feed = await parser.parseString(typeof resp.data === 'string' ? resp.data : String(resp.data));
     return feed.items || [];
   } catch (error) {
-    logger.error(`抓取 ${source.name} 失败:`, error.message);
-    throw error;
+    const message = error.message || error.code || 'Request failed';
+    logger.error(`抓取 ${source.name} 失败:`, message);
+    throw new Error(message);
   }
 }
 
-// 处理和保存新闻
 async function processAndSaveItems(source, items) {
-  // 解析关键词配置
   const keywords = source.keywords ? JSON.parse(source.keywords) : [];
   const blacklist = source.blacklist ? JSON.parse(source.blacklist) : [];
-
   const newsList = [];
 
   for (const item of items) {
@@ -109,15 +108,13 @@ async function processAndSaveItems(source, items) {
     const guid = item.guid || item.link || `${source.id}-${item.title}-${Date.now()}`;
     const pubDate = item.pubDate || item.isoDate || new Date().toISOString();
 
-    // 黑名单过滤
-    if (containsBlacklisted(title + ' ' + description, blacklist)) {
+    if (containsBlacklisted(`${title} ${description}`, blacklist)) {
       logger.debug(`[${source.name}] 跳过黑名单内容: ${title.substring(0, 50)}...`);
       continue;
     }
 
-    // 正向关键词筛选
-    if (!passesKeywords(title + ' ' + description, keywords)) {
-      logger.debug(`[${source.name}] 跳过不匹配关键词: ${title.substring(0, 50)}...`);
+    if (!passesKeywords(`${title} ${description}`, keywords)) {
+      logger.debug(`[${source.name}] 跳过未命中关键词内容: ${title.substring(0, 50)}...`);
       continue;
     }
 
@@ -127,50 +124,42 @@ async function processAndSaveItems(source, items) {
       title,
       description,
       link,
-      pub_date: pubDate,
+      pub_date: pubDate
     });
   }
 
-  // 批量插入
   const insertedCount = await db.insertManyNews(newsList);
   logger.info(`[${source.name}] 新增 ${insertedCount}/${newsList.length} 条新闻`);
-  
+
   return { source: source.name, total: newsList.length, inserted: insertedCount };
 }
 
-// 抓取单个源
 async function fetchAndUpdateSource(source) {
-  // 跳过非 RSS 类型的源（如 github）
   if (source.type === 'github') {
-    logger.debug(`[RSS 服务] 跳过 GitHub 类型源：${source.name}`);
+    logger.debug(`[RSS 服务] 跳过 GitHub 类型源: ${source.name}`);
     return { source: source.name, skipped: true, reason: 'github type' };
   }
-  
+
   try {
     const items = await fetchSource(source);
     return await processAndSaveItems(source, items);
-  } catch (err) {
-    return { source: source.name, error: err.message };
+  } catch (error) {
+    return { source: source.name, error: error.message || 'Request failed' };
   }
 }
 
-// 抓取所有源
 async function fetchAllSources() {
   const sources = await db.getEnabledSources();
-  // 过滤掉 github 类型的源
-  const rssSources = sources.filter(s => s.type !== 'github');
-  
+  const rssSources = sources.filter((source) => source.type !== 'github');
+
   if (rssSources.length === 0) {
     logger.info('未找到启用的 RSS 源');
     return { total: 0, success: 0, failed: 0, details: [] };
   }
-  
+
   logger.info(`开始抓取 ${rssSources.length} 个 RSS 新闻源...`);
 
-  const results = await Promise.allSettled(
-    rssSources.map((s) => fetchAndUpdateSource(s))
-  );
-
+  const results = await Promise.allSettled(rssSources.map((source) => fetchAndUpdateSource(source)));
   const summary = {
     total: rssSources.length,
     success: 0,
@@ -178,19 +167,25 @@ async function fetchAllSources() {
     details: []
   };
 
-  results.forEach((r, i) => {
-    if (r.status === 'fulfilled') {
-      if (r.value.skipped) {
-        // 跳过的源不计入成功/失败
-        summary.details.push(r.value);
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      if (result.value.skipped) {
+        summary.details.push(result.value);
+      } else if (result.value.error) {
+        summary.failed += 1;
+        summary.details.push(result.value);
       } else {
-        summary.success++;
-        summary.details.push(r.value);
+        summary.success += 1;
+        summary.details.push(result.value);
       }
-    } else {
-      summary.failed++;
-      summary.details.push({ source: rssSources[i].name, error: r.reason?.message });
+      return;
     }
+
+    summary.failed += 1;
+    summary.details.push({
+      source: rssSources[index].name,
+      error: result.reason?.message || 'Unknown error'
+    });
   });
 
   return summary;

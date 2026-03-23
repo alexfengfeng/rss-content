@@ -34,7 +34,7 @@
           <tr><td class="text-muted">发布时间</td><td><%= news.pub_date || '未知' %></td></tr>
           <tr><td class="text-muted">抓取时间</td><td><%= news.fetched_at %></td></tr>
           <% if (news.rewritten_at) { %><tr><td class="text-muted">改写时间</td><td><%= news.rewritten_at %></td></tr><% } %>
-          <% if (news.published_at) { %><tr><td class="text-muted">发布到公众号</td><td><%= news.published_at %></td></tr><% } %>
+          <% if (news.published_at) { %><tr><td class="text-muted">发布时间</td><td><%= news.published_at %></td></tr><% } %>
           <tr>
             <td class="text-muted">原文链接</td>
             <td>
@@ -78,7 +78,7 @@
         <div class="mb-3">
           <label class="form-label">选择改写模板</label>
           <select id="templateId" class="form-control">
-            <option value="">默认模板</option>
+            <option value="">默认改写模板</option>
             <% (templates || []).forEach((template) => { %>
               <option value="<%= template.id %>">
                 <%= template.name %><%= template.is_default ? '（默认）' : '' %>
@@ -87,11 +87,24 @@
           </select>
         </div>
 
+        <div class="mb-3">
+          <label class="form-label">选择发布样式模板</label>
+          <select id="publishTemplateId" class="form-control">
+            <option value="">默认发布样式</option>
+            <% (publishTemplates || []).forEach((template) => { %>
+              <option value="<%= template.id %>" <%= String(template.id) === String(news.publish_template_id || '') ? 'selected' : '' %>>
+                <%= template.name %><%= template.is_default ? '（默认）' : '' %>
+              </option>
+            <% }); %>
+          </select>
+          <div class="form-text">改写模板控制提示词，发布样式模板控制正文排版、摘要和封面策略。</div>
+        </div>
+
         <% if (news.status === 'pending' || news.status === 'failed') { %>
           <div class="text-center py-5">
             <i class="bi bi-magic fs-1 text-muted mb-3 d-block"></i>
             <p class="text-muted">
-              <%= news.status === 'failed' ? '当前任务失败，可选择模板后重新改写。' : '此新闻尚未改写。' %>
+              <%= news.status === 'failed' ? '当前任务失败，可重新选择模板后再次改写。' : '这条新闻还没有改写。' %>
             </p>
             <% if (news.status === 'failed') { %>
               <button class="btn btn-warning me-2" onclick="resetFailed(<%= news.id %>, event)">
@@ -166,6 +179,10 @@ function getSelectedTemplateId() {
   return document.getElementById('templateId')?.value || '';
 }
 
+function getSelectedPublishTemplateId() {
+  return document.getElementById('publishTemplateId')?.value || '';
+}
+
 async function rewriteArticle(newsId, clickEvent) {
   const btn = clickEvent.currentTarget;
   const originalHtml = btn.innerHTML;
@@ -177,7 +194,8 @@ async function rewriteArticle(newsId, clickEvent) {
       method: 'POST',
       body: JSON.stringify({
         newsId,
-        templateId: getSelectedTemplateId()
+        templateId: getSelectedTemplateId(),
+        publishTemplateId: getSelectedPublishTemplateId()
       })
     });
     showToast('改写成功', 'success');
@@ -199,7 +217,10 @@ async function publishNews(newsId, clickEvent) {
   try {
     await apiFetch('/api/publish', {
       method: 'POST',
-      body: JSON.stringify({ newsId })
+      body: JSON.stringify({
+        newsId,
+        publishTemplateId: getSelectedPublishTemplateId()
+      })
     });
     showToast('发布成功', 'success');
     setTimeout(() => location.reload(), 800);

@@ -365,6 +365,23 @@ const BUILTIN_TEMPLATE_SEEDS = [
   }
 ];
 
+const BUILTIN_PUBLISH_TEMPLATE_SEEDS = [
+  {
+    name: '默认图文模板',
+    description: '适用于普通新闻发布的默认样式模板',
+    styleKey: 'default_article',
+    targetType: 'all',
+    isDefault: true
+  },
+  {
+    name: 'InfoQ 风开源项目模板',
+    description: '适用于 GitHub 开源项目介绍的 InfoQ 风样式模板',
+    styleKey: 'open_source_infoq',
+    targetType: 'github',
+    isDefault: true
+  }
+];
+
 function upsertBuiltinRewriteTemplate(template, isDefault) {
   db.run(`
     INSERT INTO rewrite_templates (name, description, system_prompt, user_prompt, is_enabled, is_default, updated_at)
@@ -401,6 +418,38 @@ function seedBuiltinRewriteTemplates() {
   });
 }
 
+function upsertBuiltinPublishTemplate(template, isDefault) {
+  db.run(`
+    INSERT INTO publish_templates (name, description, style_key, target_type, is_enabled, is_default, updated_at)
+    VALUES (?, ?, ?, ?, 1, ?, datetime('now'))
+    ON CONFLICT(name) DO UPDATE SET
+      description = excluded.description,
+      style_key = excluded.style_key,
+      target_type = excluded.target_type,
+      is_enabled = 1,
+      is_default = excluded.is_default,
+      updated_at = datetime('now')
+  `, [
+    template.name,
+    template.description,
+    template.styleKey,
+    template.targetType,
+    isDefault ? 1 : 0
+  ]);
+}
+
+function seedBuiltinPublishTemplates() {
+  db.serialize(() => {
+    BUILTIN_PUBLISH_TEMPLATE_SEEDS.forEach((template) => {
+      if (template.isDefault) {
+        db.run('UPDATE publish_templates SET is_default = 0 WHERE target_type = ?', [template.targetType]);
+      }
+
+      upsertBuiltinPublishTemplate(template, template.isDefault);
+    });
+  });
+}
+
 const dataDir = path.dirname(DB_PATH);
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -411,8 +460,15 @@ const db = new sqlite3.Database(DB_PATH);
 
 function insertDefaultRewriteTemplate() {
   db.run(`
-    INSERT INTO rewrite_templates (name, description, system_prompt, user_prompt, is_enabled, is_default)
-    VALUES (?, ?, ?, ?, 1, 1)
+    INSERT INTO rewrite_templates (name, description, system_prompt, user_prompt, is_enabled, is_default, updated_at)
+    VALUES (?, ?, ?, ?, 1, 1, datetime('now'))
+    ON CONFLICT(name) DO UPDATE SET
+      description = excluded.description,
+      system_prompt = excluded.system_prompt,
+      user_prompt = excluded.user_prompt,
+      is_enabled = 1,
+      is_default = 1,
+      updated_at = datetime('now')
   `, [
     DEFAULT_TEMPLATE_NAME,
     DEFAULT_TEMPLATE_DESCRIPTION,
@@ -534,6 +590,24 @@ db.serialize(() => {
   db.run('CREATE INDEX IF NOT EXISTS idx_rewrite_templates_enabled ON rewrite_templates(is_enabled)');
   db.run('CREATE INDEX IF NOT EXISTS idx_rewrite_templates_default ON rewrite_templates(is_default)');
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS publish_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT,
+      style_key TEXT NOT NULL,
+      target_type TEXT NOT NULL DEFAULT 'all' CHECK(target_type IN ('all', 'github')),
+      is_enabled INTEGER NOT NULL DEFAULT 1,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.run('CREATE INDEX IF NOT EXISTS idx_publish_templates_enabled ON publish_templates(is_enabled)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_publish_templates_default ON publish_templates(is_default)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_publish_templates_target ON publish_templates(target_type)');
+
   db.get('SELECT COUNT(*) as total FROM rewrite_templates', (err, row) => {
     if (err || !row || row.total > 0) return;
 
@@ -541,6 +615,7 @@ db.serialize(() => {
   });
 
   seedBuiltinRewriteTemplates();
+  seedBuiltinPublishTemplates();
 
   db.all('PRAGMA table_info(news)', (err, columns) => {
     if (err) return;
@@ -551,6 +626,9 @@ db.serialize(() => {
     }
     if (!columnNames.has('project_meta')) {
       db.run('ALTER TABLE news ADD COLUMN project_meta TEXT');
+    }
+    if (!columnNames.has('publish_template_id')) {
+      db.run('ALTER TABLE news ADD COLUMN publish_template_id INTEGER');
     }
   });
 });
@@ -659,6 +737,85 @@ const NewsDB = {
     });
   },
 
+  getAllPublishTemplates() {
+    return new Promise((resolve, reject) => {
+      db.all(`
+        SELECT *
+        FROM publish_templates
+        ORDER BY
+          CASE target_type WHEN 'all' THEN 0 ELSE 1 END,
+          is_default DESC,
+          id ASC
+      `, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+  },
+
+  getEnabledPublishTemplates(targetType = 'all') {
+    return new Promise((resolve, reject) => {
+      db.all(`
+        SELECT *
+        FROM publish_templates
+        WHERE is_enabled = 1
+          AND (target_type = ? OR target_type = 'all')
+        ORDER BY
+          CASE
+            WHEN target_type = ? THEN 0
+            WHEN target_type = 'all' THEN 1
+            ELSE 2
+          END,
+          is_default DESC,
+          id ASC
+      `, [targetType, targetType], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+  },
+
+  getPublishTemplateById(id) {
+    return new Promise((resolve, reject) => {
+      db.get('SELECT * FROM publish_templates WHERE id = ?', [id], (err, row) => {
+        if (err) reject(err);
+        else resolve(row || null);
+      });
+    });
+  },
+
+  getPublishTemplateByName(name) {
+    return new Promise((resolve, reject) => {
+      db.get('SELECT * FROM publish_templates WHERE name = ?', [name], (err, row) => {
+        if (err) reject(err);
+        else resolve(row || null);
+      });
+    });
+  },
+
+  getDefaultPublishTemplate(targetType = 'all') {
+    return new Promise((resolve, reject) => {
+      db.get(`
+        SELECT *
+        FROM publish_templates
+        WHERE is_enabled = 1
+          AND (target_type = ? OR target_type = 'all')
+        ORDER BY
+          CASE
+            WHEN target_type = ? AND is_default = 1 THEN 0
+            WHEN target_type = 'all' AND is_default = 1 THEN 1
+            WHEN target_type = ? THEN 2
+            ELSE 3
+          END,
+          id ASC
+        LIMIT 1
+      `, [targetType, targetType, targetType], (err, row) => {
+        if (err) reject(err);
+        else resolve(row || null);
+      });
+    });
+  },
+
   getRewriteTemplateById(id) {
     return new Promise((resolve, reject) => {
       db.get('SELECT * FROM rewrite_templates WHERE id = ?', [id], (err, row) => {
@@ -736,6 +893,31 @@ const NewsDB = {
     });
   },
 
+  addPublishTemplate(template) {
+    return new Promise((resolve, reject) => {
+      db.serialize(() => {
+        if (template.is_default) {
+          db.run('UPDATE publish_templates SET is_default = 0 WHERE target_type = ?', [template.target_type]);
+        }
+
+        db.run(`
+          INSERT INTO publish_templates (name, description, style_key, target_type, is_enabled, is_default, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+        `, [
+          template.name,
+          template.description || '',
+          template.style_key,
+          template.target_type || 'all',
+          template.is_enabled ? 1 : 0,
+          template.is_default ? 1 : 0
+        ], function(err) {
+          if (err) reject(err);
+          else resolve({ id: this.lastID });
+        });
+      });
+    });
+  },
+
   updateRewriteTemplate(id, template) {
     return new Promise((resolve, reject) => {
       db.serialize(() => {
@@ -769,6 +951,39 @@ const NewsDB = {
     });
   },
 
+  updatePublishTemplate(id, template) {
+    return new Promise((resolve, reject) => {
+      db.serialize(() => {
+        if (template.is_default) {
+          db.run('UPDATE publish_templates SET is_default = 0 WHERE target_type = ? AND id != ?', [template.target_type, id]);
+        }
+
+        db.run(`
+          UPDATE publish_templates
+          SET name = ?,
+              description = ?,
+              style_key = ?,
+              target_type = ?,
+              is_enabled = ?,
+              is_default = ?,
+              updated_at = datetime('now')
+          WHERE id = ?
+        `, [
+          template.name,
+          template.description || '',
+          template.style_key,
+          template.target_type || 'all',
+          template.is_enabled ? 1 : 0,
+          template.is_default ? 1 : 0,
+          id
+        ], function(err) {
+          if (err) reject(err);
+          else resolve({ changes: this.changes });
+        });
+      });
+    });
+  },
+
   deleteRewriteTemplate(id) {
     return new Promise((resolve, reject) => {
       db.get('SELECT is_default FROM rewrite_templates WHERE id = ?', [id], (selectErr, row) => {
@@ -783,6 +998,27 @@ const NewsDB = {
         }
 
         db.run('DELETE FROM rewrite_templates WHERE id = ?', [id], function(err) {
+          if (err) reject(err);
+          else resolve({ changes: this.changes });
+        });
+      });
+    });
+  },
+
+  deletePublishTemplate(id) {
+    return new Promise((resolve, reject) => {
+      db.get('SELECT is_default FROM publish_templates WHERE id = ?', [id], (selectErr, row) => {
+        if (selectErr) {
+          reject(selectErr);
+          return;
+        }
+
+        if (row?.is_default) {
+          reject(new Error('默认发布样式模板不能删除'));
+          return;
+        }
+
+        db.run('DELETE FROM publish_templates WHERE id = ?', [id], function(err) {
           if (err) reject(err);
           else resolve({ changes: this.changes });
         });
@@ -925,6 +1161,11 @@ const NewsDB = {
         params.push(options.projectMeta);
       }
 
+      if (options.publishTemplateId !== undefined) {
+        updates.push('publish_template_id = ?');
+        params.push(options.publishTemplateId);
+      }
+
       params.push(id);
 
       db.run(`
@@ -999,6 +1240,19 @@ const NewsDB = {
         SET ${updates.join(', ')}
         WHERE id = ?
       `, params, function(err) {
+        if (err) reject(err);
+        else resolve({ changes: this.changes });
+      });
+    });
+  },
+
+  updateNewsPublishTemplate(id, publishTemplateId) {
+    return new Promise((resolve, reject) => {
+      db.run(`
+        UPDATE news
+        SET publish_template_id = ?
+        WHERE id = ?
+      `, [publishTemplateId || null, id], function(err) {
         if (err) reject(err);
         else resolve({ changes: this.changes });
       });

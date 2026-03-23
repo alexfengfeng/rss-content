@@ -19,6 +19,126 @@ function summarizeResultMessage(result) {
   return `total=${result.total || 0}, success=${result.success || 0}, failed=${result.failed || 0}`;
 }
 
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString('en-US');
+}
+
+function isGithubProjectNews(news) {
+  return news?.source_type === 'github' || /github\.com/i.test(news?.link || '');
+}
+
+function getPublishTargetType(news) {
+  return isGithubProjectNews(news) ? 'github' : 'all';
+}
+
+async function resolvePublishTemplate(news, options = {}) {
+  if (options.publishTemplate) {
+    return options.publishTemplate;
+  }
+
+  if (options.publishTemplateId) {
+    const selected = await db.getPublishTemplateById(options.publishTemplateId);
+    if (selected) return selected;
+  }
+
+  if (news?.publish_template_id) {
+    const saved = await db.getPublishTemplateById(news.publish_template_id);
+    if (saved) return saved;
+  }
+
+  return db.getDefaultPublishTemplate(getPublishTargetType(news));
+}
+
+function resolvePublishProfile(news, publishTemplate) {
+  const styleKey = String(publishTemplate?.style_key || '').trim();
+
+  if (styleKey === 'open_source_infoq' || isGithubProjectNews(news)) {
+    return {
+      coverPreset: 'open_source_infoq',
+      coverSubtitle: '开源项目解读',
+      forceGenerateCover: true
+    };
+  }
+
+  return {
+    coverPreset: 'default',
+    coverSubtitle: '资讯摘要',
+    forceGenerateCover: false
+  };
+}
+
+function parseProjectMeta(news) {
+  if (!news?.project_meta) return null;
+
+  try {
+    return typeof news.project_meta === 'string'
+      ? JSON.parse(news.project_meta)
+      : news.project_meta;
+  } catch (error) {
+    logger.warn(`[publish] failed to parse project_meta for news ${news?.id}: ${error.message}`);
+    return null;
+  }
+}
+
+function extractLeadFromHtml(content = '') {
+  const strongMatch = String(content).match(/<strong[^>]*>(.*?)<\/strong>/i);
+  if (strongMatch?.[1]) {
+    return strongMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  }
+
+  const paragraphMatch = String(content).match(/<p[^>]*>(.*?)<\/p>/i);
+  if (paragraphMatch?.[1]) {
+    return paragraphMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  }
+
+  return '';
+}
+
+function buildEditorialLead(projectName, lead, description) {
+  const base = String(lead || description || '').replace(/\s+/g, ' ').trim();
+  if (!base) {
+    return `${projectName} 是一个值得关注的开源项目。`;
+  }
+
+  let normalized = base
+    .replace(/^[一二三四五六七八九十]+\s*[、.．-]\s*/, '')
+    .replace(/^一个/, '')
+    .replace(/^一款/, '')
+    .replace(/^一套/, '')
+    .replace(/^一项/, '')
+    .trim();
+
+  if (!normalized) {
+    return `${projectName} 是一个值得关注的开源项目。`;
+  }
+
+  if (/^面向/.test(normalized) || /^(用于|提供|帮助|聚焦|展示|支持|连接)/.test(normalized)) {
+    return `${projectName} ${normalized.replace(/[。！？?!]+$/, '')}。`;
+  }
+
+  if (/^是/.test(normalized)) {
+    return `${projectName}${normalized.replace(/[。！？?!]+$/, '')}。`;
+  }
+
+  return `${projectName} 是${normalized.replace(/[。！？?!]+$/, '')}。`;
+}
+
+function buildGithubDigest(news, title, content) {
+  const meta = parseProjectMeta(news);
+  const projectName = title.split('：')[0] || meta?.name || title;
+  const lead = extractLeadFromHtml(content);
+  const description = String(meta?.description || '').replace(/\s+/g, ' ').trim();
+  const stars = meta?.stars ? `目前 GitHub Star 数约 ${formatNumber(meta.stars)}。` : '';
+
+  return [
+    buildEditorialLead(projectName, lead, description),
+    stars
+  ]
+    .filter(Boolean)
+    .join('')
+    .slice(0, 120);
+}
+
 async function withJobRun(meta, runner) {
   const created = await db.createJobRun({
     jobType: meta.jobType,
@@ -58,8 +178,9 @@ async function withJobRun(meta, runner) {
 }
 
 async function rewriteNewsBySource(news, options = {}) {
-  if (news.source_type === 'github' && /github\.com/i.test(news.link || '')) {
-    return rewriteGithubProject(news);
+  if (isGithubProjectNews(news)) {
+    const publishTemplate = await resolvePublishTemplate(news, options);
+    return rewriteGithubProject(news, { publishTemplate });
   }
 
   const nextOptions = { ...options };
@@ -76,19 +197,34 @@ async function rewriteNewsBySource(news, options = {}) {
   return rewriteNews(news.title, news.description, news.link, nextOptions);
 }
 
-async function publishSingleNews(news) {
+async function publishSingleNews(news, options = {}) {
   const title = news.rewritten_title || news.title;
   const content = news.rewritten_content || news.description || '';
+  const isGithubProject = isGithubProjectNews(news);
+  const publishTemplate = await resolvePublishTemplate(news, options);
+  const publishProfile = resolvePublishProfile(news, publishTemplate);
+
+  if (publishTemplate?.id && news.publish_template_id !== publishTemplate.id) {
+    await db.updateNewsPublishTemplate(news.id, publishTemplate.id);
+    news.publish_template_id = publishTemplate.id;
+  }
+
   const fullContent = buildPublishContent(content, {
     link: news.link,
     sourceName: news.source_name
   });
+  const summary = isGithubProject
+    ? buildGithubDigest(news, title, content)
+    : buildSummaryText(content);
 
   const result = await publishArticle({
     title,
     content: fullContent,
-    summary: buildSummaryText(content),
-    coverImage: news.image_url || ''
+    summary,
+    coverImage: news.image_url || '',
+    coverPreset: publishProfile.coverPreset,
+    coverSubtitle: publishProfile.coverSubtitle,
+    forceGenerateCover: publishProfile.forceGenerateCover
   });
 
   await db.updatePublishedStatus(news.id, result.mediaId);
@@ -137,14 +273,15 @@ async function runRewriteJob(options = {}) {
         const result = await rewriteNewsBySource(news, options);
         await db.updateRewrittenNews(news.id, result.title, result.content, {
           imageUrl: result.imageUrl,
-          projectMeta: result.projectMeta
+          projectMeta: result.projectMeta,
+          publishTemplateId: result.publishTemplateId
         });
         success += 1;
         results.push({ id: news.id, success: true, title: result.title });
       } catch (error) {
         failed += 1;
         await db.updateFailedStatus(news.id, error.message);
-        logger.error(`[改写失败] ${news.title.substring(0, 40)}:`, error.message);
+        logger.error(`[rewrite failed] ${news.title.substring(0, 40)}:`, error.message);
         results.push({ id: news.id, success: false, error: error.message });
       }
 
@@ -176,13 +313,13 @@ async function runPublishJob(options = {}) {
 
     for (const news of candidates) {
       try {
-        const result = await publishSingleNews(news);
+        const result = await publishSingleNews(news, options);
         success += 1;
         results.push({ id: news.id, success: true, mediaId: result.mediaId });
       } catch (error) {
         failed += 1;
         await db.updateFailedStatus(news.id, error.message);
-        logger.error(`[发布失败] ${news.title.substring(0, 40)}:`, error.message);
+        logger.error(`[publish failed] ${news.title.substring(0, 40)}:`, error.message);
         results.push({ id: news.id, success: false, error: error.message });
       }
 
