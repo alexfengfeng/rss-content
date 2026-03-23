@@ -21,6 +21,7 @@ temp/
 # Logs
 logs/
 *.log
+vendor/rsshub-runtime/
 
 # OS files
 .DS_Store

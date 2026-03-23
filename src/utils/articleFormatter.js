@@ -1,17 +1,18 @@
 const THEME = {
-  bodyText: '#39322c',
-  headingText: '#221c17',
-  mutedText: '#7a6958',
-  link: '#8a6241',
-  accent: '#a87b52',
-  accentSoft: '#f5ede4',
-  quoteBg: '#fbf6f0',
-  surface: '#fffdf9',
-  surfaceStrong: '#fffefc',
-  border: '#e6d8c8',
-  divider: '#d7c2ab',
-  codeBg: '#f7f1ea',
-  shadow: '0 4px 14px rgba(78, 56, 33, 0.05)'
+  bodyText: '#223042',
+  headingText: '#0f172a',
+  mutedText: '#667085',
+  link: '#175cd3',
+  accent: '#1d4ed8',
+  accentStrong: '#0f172a',
+  accentSoft: '#eaf2ff',
+  quoteBg: '#f5f7fa',
+  surface: '#ffffff',
+  surfaceStrong: '#f8fafc',
+  border: '#dbe4f0',
+  divider: '#c7d4e5',
+  codeBg: '#f4f7fb',
+  shadow: '0 10px 28px rgba(15, 23, 42, 0.08)'
 };
 
 function escapeHtml(value = '') {
@@ -49,7 +50,7 @@ function renderInlineMarkdown(text = '') {
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(
       /\[(.+?)\]\((https?:\/\/[^)]+)\)/g,
-      `<a href="$2" style="color:${THEME.link};text-decoration:none;border-bottom:1px solid ${THEME.divider};padding-bottom:1px;">$1</a>`
+      `<a href="$2" style="color:${THEME.link};text-decoration:none;border-bottom:1px solid rgba(23,92,211,0.25);padding-bottom:1px;">$1</a>`
     );
 }
 
@@ -63,7 +64,33 @@ function normalizePlainText(content = '') {
 }
 
 function paragraphStyle() {
-  return `margin:10px 0;line-height:1.82;color:${THEME.bodyText};font-size:15px;text-align:justify;letter-spacing:0.15px;word-break:break-word;overflow-wrap:anywhere;`;
+  return `margin:12px 0;line-height:1.88;color:${THEME.bodyText};font-size:16px;text-align:justify;letter-spacing:0.1px;word-break:break-word;overflow-wrap:anywhere;`;
+}
+
+function headingStyle(level = 3) {
+  const fontSizeMap = {
+    1: '23px',
+    2: '21px',
+    3: '19px',
+    4: '18px',
+    5: '17px',
+    6: '16px'
+  };
+
+  return [
+    'display:inline-block',
+    'margin:0',
+    'padding:8px 14px',
+    'border-radius:8px',
+    'background:linear-gradient(90deg, #0f172a 0%, #1856d6 70%, #1da1f2 100%)',
+    'color:#ffffff',
+    `font-size:${fontSizeMap[level] || '19px'}`,
+    'line-height:1.45',
+    'font-weight:700',
+    "font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif",
+    'word-break:break-word',
+    'overflow-wrap:anywhere'
+  ].join(';');
 }
 
 function renderParagraph(block = '') {
@@ -80,20 +107,18 @@ function renderParagraph(block = '') {
   return `<p style="${paragraphStyle()}">${renderInlineMarkdown(text)}</p>`;
 }
 
-function renderHeading(text = '') {
+function renderHeading(text = '', level = 3) {
   return [
-    `<section style="margin:22px 0 10px;">`,
-    `<div style="width:28px;height:2px;background:${THEME.accent};border-radius:999px;margin-bottom:12px;"></div>`,
-    `<h3 style="margin:0;font-size:20px;line-height:1.42;color:${THEME.headingText};font-weight:700;letter-spacing:0.25px;font-family:Georgia,'Times New Roman','Songti SC','STSong',serif;word-break:break-word;overflow-wrap:anywhere;">${renderInlineMarkdown(text)}</h3>`,
+    `<section style="margin:28px 0 12px;">`,
+    `<h${level} style="${headingStyle(level)}">${renderInlineMarkdown(text)}</h${level}>`,
     `</section>`
   ].join('');
 }
 
 function renderQuote(text = '') {
   return [
-    `<blockquote style="margin:16px 0;padding:14px 16px;border-left:3px solid ${THEME.accent};background:${THEME.quoteBg};`,
-    `border-radius:0 12px 12px 0;color:${THEME.bodyText};box-shadow:inset 0 0 0 1px rgba(168,123,82,0.08);">`,
-    `<p style="margin:0;line-height:1.78;font-size:15px;">${renderInlineMarkdown(text)}</p>`,
+    `<blockquote style="margin:18px 0;padding:18px 18px;border-radius:14px;background:${THEME.quoteBg};border:1px solid ${THEME.border};box-shadow:inset 0 0 0 1px rgba(255,255,255,0.45);">`,
+    `<p style="margin:0;color:${THEME.headingText};line-height:1.8;font-size:16px;font-weight:600;">${renderInlineMarkdown(text)}</p>`,
     `</blockquote>`
   ].join('');
 }
@@ -105,10 +130,10 @@ function renderList(block = '', ordered = false) {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => line.replace(ordered ? /^\d+\.\s+/ : /^[-*]\s+/, ''))
-    .map((line) => `<li style="margin:6px 0;line-height:1.78;color:${THEME.bodyText};word-break:break-word;overflow-wrap:anywhere;">${renderInlineMarkdown(line)}</li>`)
+    .map((line) => `<li style="margin:8px 0;line-height:1.82;color:${THEME.bodyText};word-break:break-word;overflow-wrap:anywhere;">${renderInlineMarkdown(line)}</li>`)
     .join('');
 
-  return `<${tag} style="margin:10px 0;padding-left:24px;color:${THEME.bodyText};font-size:15px;word-break:break-word;overflow-wrap:anywhere;">${items}</${tag}>`;
+  return `<${tag} style="margin:12px 0;padding-left:24px;color:${THEME.bodyText};font-size:16px;word-break:break-word;overflow-wrap:anywhere;">${items}</${tag}>`;
 }
 
 function markdownishToHtml(content = '') {
@@ -123,11 +148,12 @@ function markdownishToHtml(content = '') {
   return blocks
     .map((block) => {
       if (block === '---') {
-        return `<hr style="border:none;border-top:1px solid ${THEME.divider};margin:22px 0;">`;
+        return `<hr style="border:none;border-top:1px solid ${THEME.divider};margin:24px 0;">`;
       }
 
-      if (/^#{1,3}\s+/.test(block)) {
-        return renderHeading(block.replace(/^#{1,3}\s+/, '').trim());
+      if (/^#{1,6}\s+/.test(block)) {
+        const hashes = block.match(/^#+/)[0].length;
+        return renderHeading(block.replace(/^#{1,6}\s+/, '').trim(), Math.min(hashes, 6));
       }
 
       if (/^>\s+/.test(block)) {
@@ -175,18 +201,18 @@ function normalizeHtmlSpacing(html = '') {
   });
 
   out = out.replace(/<p(?![^>]*style=)([^>]*)>/gi, `<p$1 style="${paragraphStyle()}">`);
-  out = out.replace(/<li(?![^>]*style=)([^>]*)>/gi, `<li$1 style="margin:6px 0;line-height:1.78;color:${THEME.bodyText};word-break:break-word;overflow-wrap:anywhere;">`);
-  out = out.replace(/<h([1-6])(?![^>]*style=)([^>]*)>/gi, `<h$1$2 style="margin:22px 0 10px;line-height:1.42;color:${THEME.headingText};font-weight:700;font-family:Georgia,'Times New Roman','Songti SC','STSong',serif;word-break:break-word;overflow-wrap:anywhere;">`);
-  out = out.replace(/<blockquote(?![^>]*style=)([^>]*)>/gi, `<blockquote$1 style="margin:16px 0;padding:14px 16px;border-left:3px solid ${THEME.accent};background:${THEME.quoteBg};border-radius:0 12px 12px 0;color:${THEME.bodyText};word-break:break-word;overflow-wrap:anywhere;">`);
-  out = out.replace(/<a(?![^>]*style=)([^>]*)>/gi, `<a$1 style="color:${THEME.link};text-decoration:none;border-bottom:1px solid ${THEME.divider};padding-bottom:1px;word-break:break-all;">`);
+  out = out.replace(/<li(?![^>]*style=)([^>]*)>/gi, `<li$1 style="margin:8px 0;line-height:1.82;color:${THEME.bodyText};word-break:break-word;overflow-wrap:anywhere;">`);
+  out = out.replace(/<h([1-6])(?![^>]*style=)([^>]*)>/gi, (match, level, attrs) => `<h${level}${attrs} style="${headingStyle(Number(level))}">`);
+  out = out.replace(/<blockquote(?![^>]*style=)([^>]*)>/gi, `<blockquote$1 style="margin:18px 0;padding:18px 18px;border-radius:14px;background:${THEME.quoteBg};border:1px solid ${THEME.border};color:${THEME.headingText};word-break:break-word;overflow-wrap:anywhere;">`);
+  out = out.replace(/<a(?![^>]*style=)([^>]*)>/gi, `<a$1 style="color:${THEME.link};text-decoration:none;border-bottom:1px solid rgba(23,92,211,0.25);padding-bottom:1px;word-break:break-all;">`);
   out = out.replace(/<td(?![^>]*style=)([^>]*)>/gi, `<td$1 style="word-break:break-word;overflow-wrap:anywhere;vertical-align:top;">`);
   out = out.replace(/<th(?![^>]*style=)([^>]*)>/gi, `<th$1 style="word-break:break-word;overflow-wrap:anywhere;vertical-align:top;">`);
 
   return out;
 }
 
-function makeMobileFriendlyHtml(html = '') {
-  let out = normalizeHtmlSpacing(html);
+function decorateMediaBlocks(html = '') {
+  let out = String(html || '');
 
   out = out.replace(/<img\b([^>]*)>/gi, (match, attrs) => {
     if (/style\s*=/.test(attrs)) {
@@ -203,23 +229,79 @@ function makeMobileFriendlyHtml(html = '') {
     return `<table${attrs} style="display:block;overflow-x:auto;max-width:100%;border-collapse:collapse;table-layout:fixed;">`;
   });
 
+  return out;
+}
+
+function extractLeadText(content = '') {
+  const html = String(content || '');
+  if (isHtmlContent(html)) {
+    const strongMatch = html.match(/<strong[^>]*>(.*?)<\/strong>/i);
+    if (strongMatch?.[1]) {
+      return stripHtml(strongMatch[1]);
+    }
+
+    const paragraphMatch = html.match(/<p[^>]*>(.*?)<\/p>/i);
+    if (paragraphMatch?.[1]) {
+      return stripHtml(paragraphMatch[1]);
+    }
+  }
+
+  const plain = normalizePlainText(stripHtml(html) || html);
+  if (!plain) return '';
+
+  return plain
+    .split(/\n{2,}|\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)[0] || '';
+}
+
+function buildDefaultArticleFrame(bodyHtml = '', options = {}) {
+  const title = String(options.title || '').trim();
+  const sourceName = String(options.sourceName || '').trim();
+  const lead = extractLeadText(bodyHtml).slice(0, 120);
+  const leadBlock = lead
+    ? [
+        `<div style="margin:0 0 14px;padding:16px 16px 14px;background:#ffffff;border:1px solid ${THEME.border};border-left:4px solid ${THEME.accent};border-radius:16px;box-shadow:0 12px 28px rgba(15,23,42,0.06);">`,
+        `<p style="margin:0 0 6px;color:${THEME.link};font-size:12px;line-height:1.5;letter-spacing:0.04em;font-weight:700;">核心概述</p>`,
+        `<p style="margin:0;color:${THEME.headingText};font-size:17px;line-height:1.72;font-weight:700;word-break:break-word;overflow-wrap:anywhere;">${escapeHtml(lead)}</p>`,
+        `</div>`
+      ].join('')
+    : '';
+
+  const heroBlock = title
+    ? [
+        `<div style="margin:0 0 14px;padding:22px 18px;background:linear-gradient(180deg, #111827 0%, #0f172a 58%, #133a8a 100%);border-radius:18px;color:#ffffff;box-shadow:0 16px 38px rgba(15,23,42,0.22);">`,
+        `<p style="margin:0 0 8px;font-size:12px;line-height:1.5;letter-spacing:0.08em;font-weight:700;opacity:0.85;">资讯深读${sourceName ? ` · ${escapeHtml(sourceName)}` : ''}</p>`,
+        `<h1 style="margin:0;color:#ffffff;font-size:26px;line-height:1.38;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif;word-break:break-word;overflow-wrap:anywhere;">${escapeHtml(title)}</h1>`,
+        `</div>`
+      ].join('')
+    : '';
+
   return [
-    `<section data-rss-content-template="business-light" style="max-width:100%;padding:28px 20px 22px;background:${THEME.surfaceStrong};`,
-    `border:1px solid ${THEME.border};border-radius:18px;box-shadow:${THEME.shadow};word-break:break-word;overflow-wrap:anywhere;">`,
-    `<div style="display:flex;align-items:center;gap:10px;margin:0 0 18px;">`,
-    `<div style="width:34px;height:2px;background:${THEME.accent};border-radius:999px;"></div>`,
-    `<span style="font-size:11px;letter-spacing:1.4px;color:${THEME.mutedText};text-transform:uppercase;">Feature Brief</span>`,
-    `</div>`,
-    `<div style="font-size:15px;line-height:1.88;color:${THEME.bodyText};max-width:100%;">${out}</div>`,
+    `<section data-rss-content-template="default-article" style="max-width:100%;padding:16px;background:${THEME.surfaceStrong};border:1px solid ${THEME.border};border-radius:20px;box-shadow:${THEME.shadow};word-break:break-word;overflow-wrap:anywhere;">`,
+    heroBlock,
+    leadBlock,
+    `<div style="padding:4px 14px 14px;background:#ffffff;border:1px solid ${THEME.border};border-radius:16px;">${bodyHtml}</div>`,
     `</section>`
   ].join('');
+}
+
+function makeMobileFriendlyHtml(html = '', options = {}) {
+  const styleKey = String(options.styleKey || 'default_article').trim() || 'default_article';
+  const out = decorateMediaBlocks(normalizeHtmlSpacing(html));
+
+  if (styleKey === 'default_article') {
+    return buildDefaultArticleFrame(out, options);
+  }
+
+  return out;
 }
 
 function buildFooterHtml(link, sourceName) {
   const rows = [];
 
   if (link) {
-    rows.push(`<p style="margin:0 0 8px;color:${THEME.mutedText};font-size:13px;line-height:1.75;">原文链接：<a href="${escapeHtml(link)}" style="color:${THEME.link};text-decoration:none;border-bottom:1px solid ${THEME.divider};padding-bottom:1px;">点击查看</a></p>`);
+    rows.push(`<p style="margin:0 0 8px;color:${THEME.mutedText};font-size:13px;line-height:1.75;">原文链接：<a href="${escapeHtml(link)}" style="color:${THEME.link};text-decoration:none;border-bottom:1px solid rgba(23,92,211,0.25);padding-bottom:1px;">点击查看</a></p>`);
   }
 
   if (sourceName) {
@@ -231,18 +313,18 @@ function buildFooterHtml(link, sourceName) {
   }
 
   return [
-    `<section style="margin-top:18px;padding:14px 16px 12px;background:${THEME.surface};border:1px solid ${THEME.border};border-radius:14px;">`,
+    `<section style="margin-top:16px;padding:14px 16px 12px;background:#ffffff;border:1px solid ${THEME.border};border-radius:14px;">`,
     rows.join(''),
     `</section>`
   ].join('');
 }
 
-function buildPublishContent(content, { link, sourceName } = {}) {
+function buildPublishContent(content, { link, sourceName, title, styleKey = 'default_article' } = {}) {
   const trimmed = String(content || '').trim();
   const body = /data-rss-content-template=/i.test(trimmed)
     ? trimmed
     : (isHtmlContent(content) ? normalizeHtmlSpacing(trimmed) : markdownishToHtml(content));
-  const mobileBody = makeMobileFriendlyHtml(body);
+  const mobileBody = makeMobileFriendlyHtml(body, { title, sourceName, styleKey });
   const footer = buildFooterHtml(link, sourceName);
   if (/data-rss-content-template=/i.test(trimmed)) {
     return `${body}${footer}`.trim();
@@ -250,12 +332,12 @@ function buildPublishContent(content, { link, sourceName } = {}) {
   return `${mobileBody}${footer}`.trim();
 }
 
-function normalizePublishBody(content = '') {
+function normalizePublishBody(content = '', options = {}) {
   if (!content) return '';
   if (/data-rss-content-template=/i.test(content)) {
     return String(content).trim();
   }
-  return buildPublishContent(content);
+  return buildPublishContent(content, options);
 }
 
 function buildSummaryText(content, maxLength = 120) {

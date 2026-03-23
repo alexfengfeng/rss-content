@@ -139,16 +139,16 @@
             <button class="btn btn-info text-white" onclick="rewriteArticle(<%= news.id %>, event)">
               <i class="bi bi-arrow-repeat me-2"></i>按所选模板重新改写
             </button>
-            <% if (news.status === 'rewritten') { %>
+            <% if (news.status === 'rewritten' || news.status === 'published') { %>
               <button class="btn btn-success" onclick="publishNews(<%= news.id %>, event)">
-                <i class="bi bi-send me-2"></i>发布到微信公众号
+                <i class="bi bi-send me-2"></i><%= news.status === 'published' ? '重新推送到公众号草稿箱' : '发布到微信公众号' %>
               </button>
             <% } %>
           </div>
 
           <% if (news.status === 'published') { %>
             <div class="alert alert-success mt-4">
-              <i class="bi bi-check-circle me-2"></i>已发布到微信公众号
+              <i class="bi bi-check-circle me-2"></i>已推送到公众号草稿箱，可继续重新推送
               <% if (news.wechat_media_id) { %>
                 <div class="small text-muted mt-2">Media ID: <%= news.wechat_media_id %></div>
               <% } %>

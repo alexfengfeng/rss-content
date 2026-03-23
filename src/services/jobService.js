@@ -139,6 +139,44 @@ function buildGithubDigest(news, title, content) {
     .slice(0, 120);
 }
 
+function getProjectOwner(news, fallbackTitle = '') {
+  const meta = parseProjectMeta(news) || {};
+  return meta.owner || meta.repoFullName?.split('/')[0] || fallbackTitle.split('：')[0] || '项目作者';
+}
+
+function ensureOpenSourceInfoqPublishLayout(content, news, title) {
+  const rendered = String(content || '');
+  if (!rendered.includes('data-rss-content-template="open-source-brief"')) {
+    return rendered;
+  }
+
+  if (rendered.includes('linear-gradient(135deg, #0f4aa3 0%, #2f80ed 100%)')) {
+    return rendered;
+  }
+
+  const bodyStart = rendered.match(/<h2[\s\S]*$/);
+  if (!bodyStart?.[0]) {
+    return rendered;
+  }
+
+  const bodyHtml = bodyStart[0].replace(/<\/div>\s*$/, '');
+  const lead = extractLeadFromHtml(rendered) || title;
+  const meta = parseProjectMeta(news) || {};
+  const authorName = getProjectOwner(news, title);
+  const heroImageBlock = news.image_url
+    ? `<p style="margin: 10px 0 14px;"><img src="${news.image_url}" alt="${title}" style="width: 100%; height: auto; display: block; border-radius: 12px; border: 1px solid #d6e5ff; box-shadow: 0 8px 22px rgba(20, 114, 255, 0.10);"></p>`
+    : '';
+
+  return [
+    '<div data-rss-content-template="open-source-brief" style="font-family: -apple-system, BlinkMacSystemFont, \'PingFang SC\', \'Segoe UI\', sans-serif; color: #1f2329; font-size: 15px; max-width: 100%; padding: 16px; background: linear-gradient(180deg, #eff5ff 0%, #f8fbff 100%); border: 1px solid #d6e5ff; border-radius: 18px; box-shadow: 0 8px 24px rgba(20, 114, 255, 0.08); word-break: break-word; overflow-wrap: anywhere;">',
+    `<div style="margin: 0 0 12px; padding: 20px 18px; background: linear-gradient(135deg, #0f4aa3 0%, #2f80ed 100%); border-radius: 16px; color: #ffffff;"><p style="margin: 0 0 6px; font-size: 12px; line-height: 1.5; letter-spacing: 0.06em; font-weight: 700; opacity: 0.92;">开源项目解读 · ${authorName}</p><h1 style="margin: 0; color: #ffffff; font-size: 24px; line-height: 1.36; font-family: Georgia, 'Times New Roman', 'Songti SC', serif; word-break: break-word; overflow-wrap: anywhere;">${title}</h1></div>`,
+    `<div style="margin: 0 0 14px; padding: 14px; background: #ffffff; border: 1px solid #d6e5ff; border-top: 4px solid #1d6ff2; border-radius: 16px; box-shadow: 0 10px 24px rgba(15, 74, 163, 0.08);"><p style="margin: 0 0 6px; color: #0f56c8; font-size: 12px; line-height: 1.5; letter-spacing: 0.04em; font-weight: 700;">作者视角导语</p><p style="margin: 0 0 10px; color: #1f2329; font-size: 18px; line-height: 1.65; font-weight: 700; word-break: break-word; overflow-wrap: anywhere;">${lead}</p><p style="margin: 0; color: #6b7785; font-size: 13px; line-height: 1.7;">Stars ${formatNumber(meta.stars || 0)} | Forks ${formatNumber(meta.forks || 0)} | ${meta.language || '未知'}</p></div>`,
+    heroImageBlock,
+    `<div style="padding: 2px 14px 14px; background: #ffffff; border: 1px solid #d6e5ff; border-radius: 16px;">${bodyHtml}</div>`,
+    '</div>'
+  ].join('');
+}
+
 async function withJobRun(meta, runner) {
   const created = await db.createJobRun({
     jobType: meta.jobType,
@@ -209,13 +247,24 @@ async function publishSingleNews(news, options = {}) {
     news.publish_template_id = publishTemplate.id;
   }
 
-  const fullContent = buildPublishContent(content, {
+  const finalContent = isGithubProject && publishTemplate?.style_key === 'open_source_infoq'
+    ? ensureOpenSourceInfoqPublishLayout(content, news, title)
+    : content;
+
+  if (finalContent !== content) {
+    await db.updateNewsFields(news.id, { rewritten_content: finalContent });
+    news.rewritten_content = finalContent;
+  }
+
+  const fullContent = buildPublishContent(finalContent, {
+    title,
     link: news.link,
-    sourceName: news.source_name
+    sourceName: news.source_name,
+    styleKey: publishTemplate?.style_key || 'default_article'
   });
   const summary = isGithubProject
-    ? buildGithubDigest(news, title, content)
-    : buildSummaryText(content);
+    ? buildGithubDigest(news, title, finalContent)
+    : buildSummaryText(finalContent);
 
   const result = await publishArticle({
     title,
@@ -359,6 +408,7 @@ async function resetFailedNews(limit = 20) {
 }
 
 module.exports = {
+  ensureOpenSourceInfoqPublishLayout,
   rewriteNewsBySource,
   publishSingleNews,
   runFetchJob,
