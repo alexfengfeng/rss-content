@@ -6,6 +6,9 @@
   "scripts": {
     "start": "node src/index.js",
     "web": "node src/web/index.js",
+    "dev": "node src/scripts/runDevWeb.js",
+    "dev:web": "node src/scripts/runDevWeb.js",
+    "dev:all": "node src/scripts/runDevAll.js",
     "fetch": "node src/scripts/fetchNews.js",
     "fetch:github": "node src/scripts/fetchGithubTrending.js",
     "rewrite": "node src/scripts/rewriteNews.js",
@@ -13,7 +16,7 @@
     "publish": "node src/scripts/publishToWechat.js",
     "retry:failed": "node src/scripts/retryFailedNews.js",
     "publish:sub": "node publish-subscription.js",
-    "dev": "node src/scripts/devMode.js",
+    "dev:cli": "node src/scripts/devMode.js",
     "init": "node src/scripts/initSources.js",
     "view": "node src/scripts/viewNews.js",
     "migrate": "node src/scripts/migrate.js",

@@ -5,6 +5,7 @@ require('dotenv').config();
 const cron = require('node-cron');
 const net = require('node:net');
 const path = require('node:path');
+const fs = require('node:fs');
 const { spawn } = require('node:child_process');
 const { startWebServer } = require('./web/server');
 const { runFetchJob, runRewriteJob, runPublishJob } = require('./services/jobService');
@@ -16,6 +17,8 @@ const PUBLISH_CRON = process.env.PUBLISH_CRON || '0 9 * * *';
 const REWRITE_BATCH_SIZE = parseInt(process.env.REWRITE_BATCH_SIZE, 10) || 5;
 const PUBLISH_BATCH_SIZE = parseInt(process.env.PUBLISH_BATCH_SIZE, 10) || 3;
 const ENABLE_WEB = process.env.ENABLE_WEB !== 'false';
+const ENABLE_CRON = process.env.ENABLE_CRON !== 'false';
+const SKIP_BOOTSTRAP_TASKS = process.env.SKIP_BOOTSTRAP_TASKS === 'true';
 const AUTO_START_RSSHUB = process.env.AUTO_START_RSSHUB !== 'false';
 const DEFAULT_RSSHUB_URL = 'http://localhost:1200';
 const RSSHUB_URL = process.env.RSSHUB_URL || DEFAULT_RSSHUB_URL;
@@ -97,7 +100,7 @@ function attachChildLogging(child, label) {
 
 async function ensureLocalRsshubReady() {
   if (!AUTO_START_RSSHUB) {
-    logger.info('[RSSHub] auto start disabled by AUTO_START_RSSHUB=false');
+    logger.info('[RSSHub] auto start disabled');
     return;
   }
 
@@ -113,7 +116,7 @@ async function ensureLocalRsshubReady() {
   }
 
   const entryPath = path.join(LOCAL_RSSHUB_DIR, LOCAL_RSSHUB_ENTRY);
-  if (!require('node:fs').existsSync(entryPath)) {
+  if (!fs.existsSync(entryPath)) {
     logger.warn(`[RSSHub] local runtime not found: ${entryPath}`);
     return;
   }
@@ -152,55 +155,55 @@ function stopLocalRsshub() {
 
 async function fetchTask() {
   try {
-    logger.info('[定时任务] 开始抓取新闻...');
+    logger.info('[tasks] fetch start');
     const result = await runFetchJob();
-    logger.info(`[定时任务] 抓取完成: 成功 ${result.success}/${result.total}`);
+    logger.info(`[tasks] fetch done: ${result.success}/${result.total}`);
   } catch (error) {
-    logger.error('[定时任务] 抓取失败:', error.message);
+    logger.error('[tasks] fetch failed:', error.message);
   }
 }
 
 async function rewriteTask() {
   try {
-    logger.info('[定时任务] 开始改写新闻...');
+    logger.info('[tasks] rewrite start');
     const result = await runRewriteJob({ limit: REWRITE_BATCH_SIZE });
 
     if (result.total === 0) {
-      logger.info('[定时任务] 没有待改写的新闻');
+      logger.info('[tasks] no pending news to rewrite');
       return;
     }
 
-    logger.info(`[定时任务] 改写完成: ${result.success}/${result.total}`);
+    logger.info(`[tasks] rewrite done: ${result.success}/${result.total}`);
   } catch (error) {
-    logger.error('[定时任务] 改写失败:', error.message);
+    logger.error('[tasks] rewrite failed:', error.message);
   }
 }
 
 async function publishTask() {
   try {
-    logger.info('[定时任务] 开始发布到公众号...');
+    logger.info('[tasks] publish start');
     const result = await runPublishJob({ limit: PUBLISH_BATCH_SIZE });
 
     if (result.total === 0) {
-      logger.info('[定时任务] 没有待发布的新闻');
+      logger.info('[tasks] no pending news to publish');
       return;
     }
 
-    logger.info(`[定时任务] 发布完成: ${result.success}/${result.total}`);
+    logger.info(`[tasks] publish done: ${result.success}/${result.total}`);
   } catch (error) {
-    logger.error('[定时任务] 发布失败:', error.message);
+    logger.error('[tasks] publish failed:', error.message);
   }
 }
 
 async function showStatus() {
   const stats = await db.getStats();
-  logger.info('========== 当前状态 ==========');
-  logger.info(`总新闻数: ${stats.total}`);
-  logger.info(`待改写: ${stats.byStatus.pending || 0}`);
-  logger.info(`已改写: ${stats.byStatus.rewritten || 0}`);
-  logger.info(`已发布: ${stats.byStatus.published || 0}`);
-  logger.info(`失败: ${stats.byStatus.failed || 0}`);
-  logger.info('============================');
+  logger.info('========== Current Status ==========');
+  logger.info(`Total news: ${stats.total}`);
+  logger.info(`Pending: ${stats.byStatus.pending || 0}`);
+  logger.info(`Rewritten: ${stats.byStatus.rewritten || 0}`);
+  logger.info(`Published: ${stats.byStatus.published || 0}`);
+  logger.info(`Failed: ${stats.byStatus.failed || 0}`);
+  logger.info('===================================');
 }
 
 function registerShutdownHooks() {
@@ -216,7 +219,7 @@ function registerShutdownHooks() {
 
 async function main() {
   logger.info('========================================');
-  logger.info('  News to WeChat - 统一服务入口');
+  logger.info('  News to WeChat - Unified Service');
   logger.info('========================================');
   logger.info('');
 
@@ -224,15 +227,15 @@ async function main() {
   logger.info('');
 
   if (!process.env.LLM_API_KEY) {
-    logger.error('错误: LLM_API_KEY 未配置');
+    logger.error('LLM_API_KEY is not configured');
   } else {
-    logger.info('LLM 配置已就绪');
+    logger.info('LLM configuration is ready');
   }
 
   if (!process.env.WECHAT_APPID || !process.env.WECHAT_APPSECRET) {
-    logger.warn('警告: 微信公众号配置未完整设置');
+    logger.warn('WeChat configuration is incomplete');
   } else {
-    logger.info('微信公众号配置已就绪');
+    logger.info('WeChat configuration is ready');
   }
 
   logger.info('');
@@ -244,31 +247,43 @@ async function main() {
   }
 
   logger.info('');
-  logger.info('定时任务配置:');
-  logger.info(`  - 抓取新闻: ${FETCH_CRON}`);
-  logger.info('  - 改写新闻: 抓取后自动执行');
-  logger.info(`  - 发布公众号: ${PUBLISH_CRON}`);
-  logger.info(`  - RSSHub 地址: ${RSSHUB_URL}`);
+  logger.info('Runtime configuration:');
+  logger.info(`  - Fetch cron: ${FETCH_CRON}`);
+  logger.info(`  - Publish cron: ${PUBLISH_CRON}`);
+  logger.info(`  - RSSHub URL: ${RSSHUB_URL}`);
+  logger.info(`  - Enable web: ${ENABLE_WEB}`);
+  logger.info(`  - Enable cron: ${ENABLE_CRON}`);
+  logger.info(`  - Skip bootstrap tasks: ${SKIP_BOOTSTRAP_TASKS}`);
+  logger.info(`  - Dev hot reload: ${process.env.DEV_HOT_RELOAD === 'true'}`);
   logger.info('');
-  logger.info('按 Ctrl+C 停止服务');
+  logger.info('Press Ctrl+C to stop');
   logger.info('');
 
-  await fetchTask();
-  await rewriteTask();
-
-  cron.schedule(FETCH_CRON, async () => {
-    await ensureLocalRsshubReady();
+  if (!SKIP_BOOTSTRAP_TASKS) {
     await fetchTask();
-    setTimeout(rewriteTask, 5 * 60 * 1000);
-  });
+    await rewriteTask();
+  } else {
+    logger.info('[dev] skipped bootstrap fetch/rewrite tasks');
+  }
 
-  cron.schedule(PUBLISH_CRON, publishTask);
+  if (ENABLE_CRON) {
+    cron.schedule(FETCH_CRON, async () => {
+      await ensureLocalRsshubReady();
+      await fetchTask();
+      setTimeout(rewriteTask, 5 * 60 * 1000);
+    });
+
+    cron.schedule(PUBLISH_CRON, publishTask);
+  } else {
+    logger.info('[dev] cron jobs disabled');
+  }
+
   registerShutdownHooks();
   process.stdin.resume();
 }
 
 main().catch((error) => {
-  logger.error('启动失败:', error.message);
+  logger.error('Startup failed:', error.message);
   stopLocalRsshub();
   process.exit(1);
 });

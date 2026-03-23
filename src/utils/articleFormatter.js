@@ -257,7 +257,7 @@ function buildDefaultArticleFrame(bodyHtml = '', options = {}) {
   const lead = extractLeadText(bodyHtml).slice(0, 120);
   const leadBlock = lead
     ? [
-        `<div style="margin:0 0 14px;padding:16px 16px 14px;background:#ffffff;border:1px solid ${THEME.border};border-left:4px solid ${THEME.accent};border-radius:16px;box-shadow:0 12px 28px rgba(15,23,42,0.06);">`,
+        `<div style="margin:0 0 12px;padding:14px 14px 12px;background:#ffffff;border:1px solid ${THEME.border};border-left:4px solid ${THEME.accent};border-radius:14px;box-shadow:0 10px 24px rgba(15,23,42,0.05);">`,
         `<p style="margin:0 0 6px;color:${THEME.link};font-size:12px;line-height:1.5;letter-spacing:0.04em;font-weight:700;">核心概述</p>`,
         `<p style="margin:0;color:${THEME.headingText};font-size:17px;line-height:1.72;font-weight:700;word-break:break-word;overflow-wrap:anywhere;">${escapeHtml(lead)}</p>`,
         `</div>`
@@ -266,7 +266,7 @@ function buildDefaultArticleFrame(bodyHtml = '', options = {}) {
 
   const heroBlock = title
     ? [
-        `<div style="margin:0 0 14px;padding:22px 18px;background:linear-gradient(180deg, #111827 0%, #0f172a 58%, #133a8a 100%);border-radius:18px;color:#ffffff;box-shadow:0 16px 38px rgba(15,23,42,0.22);">`,
+        `<div style="margin:0 0 12px;padding:20px 16px;background:linear-gradient(180deg, #111827 0%, #0f172a 58%, #133a8a 100%);border-radius:16px;color:#ffffff;box-shadow:0 14px 34px rgba(15,23,42,0.2);">`,
         `<p style="margin:0 0 8px;font-size:12px;line-height:1.5;letter-spacing:0.08em;font-weight:700;opacity:0.85;">资讯深读</p>`,
         `<h1 style="margin:0;color:#ffffff;font-size:26px;line-height:1.38;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif;word-break:break-word;overflow-wrap:anywhere;">${escapeHtml(title)}</h1>`,
         `</div>`
@@ -274,10 +274,10 @@ function buildDefaultArticleFrame(bodyHtml = '', options = {}) {
     : '';
 
   return [
-    `<section data-rss-content-template="default-article" style="max-width:100%;padding:16px;background:${THEME.surfaceStrong};border:1px solid ${THEME.border};border-radius:20px;box-shadow:${THEME.shadow};word-break:break-word;overflow-wrap:anywhere;">`,
+    `<section data-rss-content-template="default-article" style="max-width:100%;padding:10px;background:${THEME.surfaceStrong};border:1px solid ${THEME.border};border-radius:18px;box-shadow:${THEME.shadow};word-break:break-word;overflow-wrap:anywhere;">`,
     heroBlock,
     leadBlock,
-    `<div style="padding:4px 14px 14px;background:#ffffff;border:1px solid ${THEME.border};border-radius:16px;">${bodyHtml}</div>`,
+    `<div style="padding:2px 6px 8px;background:#ffffff;border-radius:12px;">${bodyHtml}</div>`,
     `</section>`
   ].join('');
 }

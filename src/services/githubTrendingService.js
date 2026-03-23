@@ -894,18 +894,18 @@ function decorateOpenSourceInfoqHtml(renderedHtml, outline, context) {
     : '';
 
   return compactHtml(`
-    <div data-rss-content-template="open-source-brief" style="font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif; color: ${OPEN_SOURCE_THEME.heading}; font-size: 15px; max-width: 100%; padding: 16px; background: linear-gradient(180deg, #eff5ff 0%, #f8fbff 100%); border: 1px solid ${OPEN_SOURCE_THEME.border}; border-radius: 18px; box-shadow: ${OPEN_SOURCE_THEME.glow}; word-break: break-word; overflow-wrap: anywhere;">
-      <div style="margin: 0 0 12px; padding: 20px 18px; background: linear-gradient(135deg, #0f4aa3 0%, #2f80ed 100%); border-radius: 16px; color: #ffffff;">
+    <div data-rss-content-template="open-source-brief" style="font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif; color: ${OPEN_SOURCE_THEME.heading}; font-size: 15px; max-width: 100%; padding: 10px; background: linear-gradient(180deg, #eff5ff 0%, #f8fbff 100%); border: 1px solid ${OPEN_SOURCE_THEME.border}; border-radius: 18px; box-shadow: ${OPEN_SOURCE_THEME.glow}; word-break: break-word; overflow-wrap: anywhere;">
+      <div style="margin: 0 0 10px; padding: 18px 16px; background: linear-gradient(135deg, #0f4aa3 0%, #2f80ed 100%); border-radius: 15px; color: #ffffff;">
         <p style="margin: 0 0 6px; font-size: 12px; line-height: 1.5; letter-spacing: 0.06em; font-weight: 700; opacity: 0.92;">开源项目解读 · ${escapeHtml(context.owner || context.name || '项目作者')}</p>
         <h1 style="margin: 0; color: #ffffff; font-size: 24px; line-height: 1.36; font-family: Georgia, 'Times New Roman', 'Songti SC', serif; word-break: break-word; overflow-wrap: anywhere;">${escapeHtml(outline.title)}</h1>
       </div>
-      <div style="margin: 0 0 14px; padding: 14px; background: #ffffff; border: 1px solid ${OPEN_SOURCE_THEME.border}; border-top: 4px solid ${OPEN_SOURCE_THEME.accent}; border-radius: 16px; box-shadow: 0 10px 24px rgba(15, 74, 163, 0.08);">
+      <div style="margin: 0 0 12px; padding: 12px 12px 11px; background: #ffffff; border: 1px solid ${OPEN_SOURCE_THEME.border}; border-top: 4px solid ${OPEN_SOURCE_THEME.accent}; border-radius: 14px; box-shadow: 0 8px 20px rgba(15, 74, 163, 0.07);">
         <p style="margin: 0 0 6px; color: ${OPEN_SOURCE_THEME.accentStrong}; font-size: 12px; line-height: 1.5; letter-spacing: 0.04em; font-weight: 700;">作者视角导语</p>
         <p style="margin: 0 0 10px; color: ${OPEN_SOURCE_THEME.heading}; font-size: 18px; line-height: 1.65; font-weight: 700; word-break: break-word; overflow-wrap: anywhere;">${escapeHtml(outline.one_liner)}</p>
         <p style="margin: 0; color: ${OPEN_SOURCE_THEME.muted}; font-size: 13px; line-height: 1.7;">Stars ${formatNumber(context.stars)} | Forks ${formatNumber(context.forks)} | ${escapeHtml(context.language || '未知')}</p>
       </div>
       ${heroImageBlock}
-      <div style="padding: 2px 14px 14px; background: #ffffff; border: 1px solid ${OPEN_SOURCE_THEME.border}; border-radius: 16px;">
+      <div style="padding: 2px 6px 8px; background: #ffffff; border-radius: 12px;">
         ${bodyHtml}
       </div>
     </div>

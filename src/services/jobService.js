@@ -248,9 +248,19 @@ async function publishSingleNews(news, options = {}) {
     news.publish_template_id = publishTemplate.id;
   }
 
-  const finalContent = isGithubProject && publishTemplate?.style_key === 'open_source_infoq'
+  let finalContent = isGithubProject && publishTemplate?.style_key === 'open_source_infoq'
     ? ensureOpenSourceInfoqPublishLayout(content, news, title)
     : content;
+
+  if (isGithubProject && publishTemplate?.style_key === 'open_source_infoq') {
+    finalContent = String(finalContent)
+      .replace('padding: 16px; background: linear-gradient(180deg, #eff5ff 0%, #f8fbff 100%);', 'padding: 10px; background: linear-gradient(180deg, #eff5ff 0%, #f8fbff 100%);')
+      .replace('margin: 0 0 12px; padding: 20px 18px;', 'margin: 0 0 10px; padding: 18px 16px;')
+      .replace('border-radius: 16px; color: #ffffff;', 'border-radius: 15px; color: #ffffff;')
+      .replace('margin: 0 0 14px; padding: 14px;', 'margin: 0 0 12px; padding: 12px 12px 11px;')
+      .replace('box-shadow: 0 10px 24px rgba(15, 74, 163, 0.08);', 'box-shadow: 0 8px 20px rgba(15, 74, 163, 0.07);')
+      .replace('padding: 2px 14px 14px; background: #ffffff; border: 1px solid #d6e5ff; border-radius: 16px;', 'padding: 2px 6px 8px; background: #ffffff; border-radius: 12px;');
+  }
 
   if (finalContent !== content) {
     await db.updateNewsFields(news.id, { rewritten_content: finalContent });
