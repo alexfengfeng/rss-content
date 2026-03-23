@@ -540,6 +540,7 @@ db.serialize(() => {
       status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'rewritten', 'published', 'failed')),
       published_at TEXT,
       wechat_media_id TEXT,
+      square_cover_path TEXT,
       error_message TEXT,
       fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE
@@ -629,6 +630,9 @@ db.serialize(() => {
     }
     if (!columnNames.has('publish_template_id')) {
       db.run('ALTER TABLE news ADD COLUMN publish_template_id INTEGER');
+    }
+    if (!columnNames.has('square_cover_path')) {
+      db.run('ALTER TABLE news ADD COLUMN square_cover_path TEXT');
     }
   });
 });
@@ -1213,7 +1217,7 @@ const NewsDB = {
 
   updateNewsFields(id, fields = {}) {
     return new Promise((resolve, reject) => {
-      const allowedFields = ['title', 'description', 'rewritten_title', 'rewritten_content'];
+      const allowedFields = ['title', 'description', 'rewritten_title', 'rewritten_content', 'square_cover_path'];
       const updates = [];
       const params = [];
 

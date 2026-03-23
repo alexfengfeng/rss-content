@@ -277,7 +277,7 @@ function buildDefaultArticleFrame(bodyHtml = '', options = {}) {
     `<section data-rss-content-template="default-article" style="max-width:100%;padding:10px;background:${THEME.surfaceStrong};border:1px solid ${THEME.border};border-radius:18px;box-shadow:${THEME.shadow};word-break:break-word;overflow-wrap:anywhere;">`,
     heroBlock,
     leadBlock,
-    `<div style="padding:2px 6px 8px;background:#ffffff;border-radius:12px;">${bodyHtml}</div>`,
+    `<div style="padding:0 2px 4px;">${bodyHtml}</div>`,
     `</section>`
   ].join('');
 }

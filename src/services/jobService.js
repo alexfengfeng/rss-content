@@ -172,7 +172,7 @@ function ensureOpenSourceInfoqPublishLayout(content, news, title) {
     `<div style="margin: 0 0 12px; padding: 20px 18px; background: linear-gradient(135deg, #0f4aa3 0%, #2f80ed 100%); border-radius: 16px; color: #ffffff;"><p style="margin: 0 0 6px; font-size: 12px; line-height: 1.5; letter-spacing: 0.06em; font-weight: 700; opacity: 0.92;">开源项目解读 · ${authorName}</p><h1 style="margin: 0; color: #ffffff; font-size: 24px; line-height: 1.36; font-family: Georgia, 'Times New Roman', 'Songti SC', serif; word-break: break-word; overflow-wrap: anywhere;">${title}</h1></div>`,
     `<div style="margin: 0 0 14px; padding: 14px; background: #ffffff; border: 1px solid #d6e5ff; border-top: 4px solid #1d6ff2; border-radius: 16px; box-shadow: 0 10px 24px rgba(15, 74, 163, 0.08);"><p style="margin: 0 0 6px; color: #0f56c8; font-size: 12px; line-height: 1.5; letter-spacing: 0.04em; font-weight: 700;">作者视角导语</p><p style="margin: 0 0 10px; color: #1f2329; font-size: 18px; line-height: 1.65; font-weight: 700; word-break: break-word; overflow-wrap: anywhere;">${lead}</p><p style="margin: 0; color: #6b7785; font-size: 13px; line-height: 1.7;">Stars ${formatNumber(meta.stars || 0)} | Forks ${formatNumber(meta.forks || 0)} | ${meta.language || '未知'}</p></div>`,
     heroImageBlock,
-    `<div style="padding: 2px 14px 14px; background: #ffffff; border: 1px solid #d6e5ff; border-radius: 16px;">${bodyHtml}</div>`,
+    `<div style="padding: 0 2px 4px;">${bodyHtml}</div>`,
     '</div>'
   ].join('');
 }
@@ -259,7 +259,9 @@ async function publishSingleNews(news, options = {}) {
       .replace('border-radius: 16px; color: #ffffff;', 'border-radius: 15px; color: #ffffff;')
       .replace('margin: 0 0 14px; padding: 14px;', 'margin: 0 0 12px; padding: 12px 12px 11px;')
       .replace('box-shadow: 0 10px 24px rgba(15, 74, 163, 0.08);', 'box-shadow: 0 8px 20px rgba(15, 74, 163, 0.07);')
-      .replace('padding: 2px 14px 14px; background: #ffffff; border: 1px solid #d6e5ff; border-radius: 16px;', 'padding: 2px 6px 8px; background: #ffffff; border-radius: 12px;');
+      .replace('padding: 2px 14px 14px; background: #ffffff; border: 1px solid #d6e5ff; border-radius: 16px;', 'padding: 0 2px 4px;')
+      .replace('padding: 2px 6px 8px; background: #ffffff; border-radius: 12px;', 'padding: 0 2px 4px;')
+      .replace('padding:2px 6px 8px;background:#ffffff;border-radius:12px;', 'padding:0 2px 4px;');
   }
 
   if (finalContent !== content) {
@@ -288,6 +290,13 @@ async function publishSingleNews(news, options = {}) {
   });
 
   await db.updatePublishedStatus(news.id, result.mediaId);
+  if (result.squareCoverPath) {
+    await db.updateNewsFields(news.id, { square_cover_path: result.squareCoverPath });
+    news.square_cover_path = result.squareCoverPath;
+  } else if (news.square_cover_path) {
+    await db.updateNewsFields(news.id, { square_cover_path: null });
+    news.square_cover_path = null;
+  }
   return result;
 }
 

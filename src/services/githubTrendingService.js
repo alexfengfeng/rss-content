@@ -905,7 +905,7 @@ function decorateOpenSourceInfoqHtml(renderedHtml, outline, context) {
         <p style="margin: 0; color: ${OPEN_SOURCE_THEME.muted}; font-size: 13px; line-height: 1.7;">Stars ${formatNumber(context.stars)} | Forks ${formatNumber(context.forks)} | ${escapeHtml(context.language || '未知')}</p>
       </div>
       ${heroImageBlock}
-      <div style="padding: 2px 6px 8px; background: #ffffff; border-radius: 12px;">
+      <div style="padding: 0 2px 4px;">
         ${bodyHtml}
       </div>
     </div>

@@ -34,7 +34,7 @@
           <tr><td class="text-muted">发布时间</td><td><%= news.pub_date || '未知' %></td></tr>
           <tr><td class="text-muted">抓取时间</td><td><%= news.fetched_at %></td></tr>
           <% if (news.rewritten_at) { %><tr><td class="text-muted">改写时间</td><td><%= news.rewritten_at %></td></tr><% } %>
-          <% if (news.published_at) { %><tr><td class="text-muted">发布时间</td><td><%= news.published_at %></td></tr><% } %>
+          <% if (news.published_at) { %><tr><td class="text-muted">推送时间</td><td><%= news.published_at %></td></tr><% } %>
           <tr>
             <td class="text-muted">原文链接</td>
             <td>
@@ -148,10 +148,25 @@
 
           <% if (news.status === 'published') { %>
             <div class="alert alert-success mt-4">
-              <i class="bi bi-check-circle me-2"></i>已推送到公众号草稿箱，可继续重新推送
+              <i class="bi bi-check-circle me-2"></i>已推送到公众号草稿箱，可继续重新推送。
               <% if (news.wechat_media_id) { %>
                 <div class="small text-muted mt-2">Media ID: <%= news.wechat_media_id %></div>
               <% } %>
+            </div>
+          <% } %>
+
+          <% if (news.square_cover_path && squareCoverUrl) { %>
+            <div class="mt-4">
+              <h6 class="fw-bold mb-3">正方形封面图</h6>
+              <div class="bg-light border rounded p-3">
+                <div class="mb-3">
+                  <img src="<%= squareCoverUrl %>" alt="square cover" class="img-fluid rounded border" style="max-width: 280px;">
+                </div>
+                <div class="small text-muted text-break mb-2"><%= news.square_cover_path %></div>
+                <a href="<%= squareCoverUrl %>" target="_blank" class="btn btn-sm btn-outline-primary">
+                  <i class="bi bi-box-arrow-up-right me-2"></i>打开方图
+                </a>
+              </div>
             </div>
           <% } %>
         <% } %>

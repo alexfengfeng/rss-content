@@ -14,6 +14,7 @@ const logger = require('../utils/logger');
 
 const app = express();
 const PORT = process.env.WEB_PORT || 3000;
+const generatedCoversPath = path.join(__dirname, '../../data/generated-covers');
 const PUBLISH_TEMPLATE_STYLE_OPTIONS = [
   { value: 'default_article', label: '默认图文模板' },
   { value: 'open_source_infoq', label: 'InfoQ 风开源项目模板' }
@@ -134,6 +135,7 @@ const publicPath = path.join(__dirname, 'public');
 console.log('Static files path:', publicPath);
 app.use('/css', express.static(path.join(publicPath, 'css')));
 app.use('/js', express.static(path.join(publicPath, 'js')));
+app.use('/generated-covers', express.static(generatedCoversPath));
 app.use(express.static(publicPath));
 
 app.set('view engine', 'ejs');
@@ -215,8 +217,17 @@ app.get('/news/:id', async (req, res) => {
       db.getEnabledPublishTemplates(targetType)
     ]);
 
+    let squareCoverUrl = null;
+    if (news.square_cover_path) {
+      const relativePath = path.relative(generatedCoversPath, news.square_cover_path);
+      if (relativePath && !relativePath.startsWith('..')) {
+        squareCoverUrl = `/generated-covers/${relativePath.replace(/\\/g, '/')}`;
+      }
+    }
+
     res.render('news-detail', {
       news,
+      squareCoverUrl,
       templates,
       publishTemplates,
       activeTab: 'news'
