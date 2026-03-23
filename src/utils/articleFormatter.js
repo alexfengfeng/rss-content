@@ -4,13 +4,11 @@ const THEME = {
   mutedText: '#667085',
   link: '#175cd3',
   accent: '#1d4ed8',
-  accentStrong: '#0f172a',
-  accentSoft: '#eaf2ff',
-  quoteBg: '#f5f7fa',
   surface: '#ffffff',
   surfaceStrong: '#f8fafc',
   border: '#dbe4f0',
   divider: '#c7d4e5',
+  quoteBg: '#f5f7fa',
   codeBg: '#f4f7fb',
   shadow: '0 10px 28px rgba(15, 23, 42, 0.08)'
 };
@@ -162,7 +160,6 @@ function markdownishToHtml(content = '') {
           .map((line) => line.replace(/^>\s?/, '').trim())
           .filter(Boolean)
           .join(' ');
-
         return renderQuote(quote);
       }
 
@@ -257,7 +254,6 @@ function extractLeadText(content = '') {
 
 function buildDefaultArticleFrame(bodyHtml = '', options = {}) {
   const title = String(options.title || '').trim();
-  const sourceName = String(options.sourceName || '').trim();
   const lead = extractLeadText(bodyHtml).slice(0, 120);
   const leadBlock = lead
     ? [
@@ -271,7 +267,7 @@ function buildDefaultArticleFrame(bodyHtml = '', options = {}) {
   const heroBlock = title
     ? [
         `<div style="margin:0 0 14px;padding:22px 18px;background:linear-gradient(180deg, #111827 0%, #0f172a 58%, #133a8a 100%);border-radius:18px;color:#ffffff;box-shadow:0 16px 38px rgba(15,23,42,0.22);">`,
-        `<p style="margin:0 0 8px;font-size:12px;line-height:1.5;letter-spacing:0.08em;font-weight:700;opacity:0.85;">资讯深读${sourceName ? ` · ${escapeHtml(sourceName)}` : ''}</p>`,
+        `<p style="margin:0 0 8px;font-size:12px;line-height:1.5;letter-spacing:0.08em;font-weight:700;opacity:0.85;">资讯深读</p>`,
         `<h1 style="margin:0;color:#ffffff;font-size:26px;line-height:1.38;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif;word-break:break-word;overflow-wrap:anywhere;">${escapeHtml(title)}</h1>`,
         `</div>`
       ].join('')
@@ -297,26 +293,8 @@ function makeMobileFriendlyHtml(html = '', options = {}) {
   return out;
 }
 
-function buildFooterHtml(link, sourceName) {
-  const rows = [];
-
-  if (link) {
-    rows.push(`<p style="margin:0 0 8px;color:${THEME.mutedText};font-size:13px;line-height:1.75;">原文链接：<a href="${escapeHtml(link)}" style="color:${THEME.link};text-decoration:none;border-bottom:1px solid rgba(23,92,211,0.25);padding-bottom:1px;">点击查看</a></p>`);
-  }
-
-  if (sourceName) {
-    rows.push(`<p style="margin:0;color:${THEME.mutedText};font-size:13px;line-height:1.75;">文章来源：${escapeHtml(sourceName)}</p>`);
-  }
-
-  if (rows.length === 0) {
-    return '';
-  }
-
-  return [
-    `<section style="margin-top:16px;padding:14px 16px 12px;background:#ffffff;border:1px solid ${THEME.border};border-radius:14px;">`,
-    rows.join(''),
-    `</section>`
-  ].join('');
+function buildFooterHtml() {
+  return '';
 }
 
 function buildPublishContent(content, { link, sourceName, title, styleKey = 'default_article' } = {}) {

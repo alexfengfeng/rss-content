@@ -112,6 +112,7 @@ async function rewriteNewsBySource(news, options = {}) {
   }
 
   const nextOptions = { ...options };
+  nextOptions.sourceName = news.source_name || nextOptions.sourceName;
   if (
     !nextOptions.templateId &&
     /github\.com/i.test(news.link || '')

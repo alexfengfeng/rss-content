@@ -1,7 +1,7 @@
 const db = require('../db/database');
 const { fetchAllSources } = require('./rssService');
 const { fetchAllGithubSources, rewriteGithubProject } = require('./githubTrendingService');
-const { rewriteNews } = require('./llmService');
+const { rewriteNews, sanitizeRewriteTitle, sanitizeRewriteContent } = require('./llmService');
 const { publishArticle } = require('./wechatService');
 const { buildPublishContent, buildSummaryText } = require('../utils/articleFormatter');
 const logger = require('../utils/logger');
@@ -222,6 +222,7 @@ async function rewriteNewsBySource(news, options = {}) {
   }
 
   const nextOptions = { ...options };
+  nextOptions.sourceName = news.source_name || nextOptions.sourceName;
   if (
     !nextOptions.templateId &&
     /github\.com/i.test(news.link || '')
@@ -236,8 +237,8 @@ async function rewriteNewsBySource(news, options = {}) {
 }
 
 async function publishSingleNews(news, options = {}) {
-  const title = news.rewritten_title || news.title;
-  const content = news.rewritten_content || news.description || '';
+  const title = sanitizeRewriteTitle(news.rewritten_title || news.title, news.source_name);
+  const content = sanitizeRewriteContent(news.rewritten_content || news.description || '', news.source_name);
   const isGithubProject = isGithubProjectNews(news);
   const publishTemplate = await resolvePublishTemplate(news, options);
   const publishProfile = resolvePublishProfile(news, publishTemplate);

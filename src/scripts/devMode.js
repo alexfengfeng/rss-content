@@ -181,7 +181,7 @@ async function publishOne() {
   try {
     const title = item.rewritten_title || item.title;
     const content = item.rewritten_content || item.description;
-    const fullContent = `${content}\n\n---\n\n*原文链接: [点击查看](${item.link})*\n\n*文章来源: ${item.source_name}*`;
+    const fullContent = content;
     
     const result = await publishArticle({
       title,
@@ -217,7 +217,7 @@ async function publishAll() {
       
       const title = item.rewritten_title || item.title;
       const content = item.rewritten_content || item.description;
-      const fullContent = `${content}\n\n---\n\n*原文链接: [点击查看](${item.link})*\n\n*文章来源: ${item.source_name}*`;
+      const fullContent = content;
       
       const result = await publishArticle({
         title,
