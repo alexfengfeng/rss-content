@@ -92,9 +92,8 @@ news-to-wechat/
 ├── data/                           # SQLite database directory
 │   └── news.db                     # Main database (gitignored)
 ├── docs/                           # Documentation
-│   ├── WECHAT_OFFICIAL_SETUP.md    # WeChat API setup guide
-│   ├── GITHUB_TRENDING_OPTIMIZATION.md
-│   └── REWRITE_TEMPLATE_OPTIMIZATION.md
+│   ├── OPERATIONS.md              # Runtime, deployment, and configuration
+│   └── DEVELOPMENT.md             # Development workflow and template layering
 ├── publish-subscription.js         # Standalone subscription account publisher
 ├── .env                            # Environment variables (gitignored)
 ├── .env.example                    # Environment template
@@ -170,6 +169,8 @@ npm install
 npm run init                    # Seed sources from config/sources.json
 
 # Development
+npm run dev                     # Web hot reload
+npm run dev:all                 # Unified entry hot reload (web + local RSSHub)
 npm run web                     # Start only the admin UI at http://localhost:3000
 npm start                       # Start full service (scheduler + web UI)
 
@@ -182,7 +183,7 @@ npm run publish                 # Publish rewritten news to WeChat
 npm run publish:sub             # Publish for subscription accounts (no drafts)
 
 # Utility
-npm run dev                     # Interactive CLI mode
+npm run dev:cli                 # Interactive CLI mode
 npm run view                    # CLI news viewer
 npm run view stats              # View statistics
 npm run retry:failed            # Reset failed items to pending
